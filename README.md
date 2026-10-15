@@ -113,6 +113,18 @@ and accepts archives up to 128 MiB. Without the source image, the imported avata
 cannot be edited or rebuilt. Omitting the source does not remove the built images.
 See the [avatar format](docs/format.md) for the file contents.
 
+## Use your avatar in other apps
+
+Any app built with the `mesh-avatar` runtime can load an exported `.mavatar` file
+(see [the runtime package](packages/runtime) to add it to your own app). Apps that already
+load it:
+
+- [AITuber OnAir](https://github.com/shinshin86/aituber-onair), an open source TypeScript toolkit for AI VTubers and AI
+  characters. Its [Mesh Avatar Chat example](https://github.com/shinshin86/aituber-onair/tree/main/packages/core/examples/react-mesh-avatar-app) runs your avatar as a character that
+  chats with an LLM, speaks with lip sync from the audio, changes its face with emotion tags,
+  and reads live comments from YouTube or Twitch. Open **Settings → Avatar** in the example
+  and load your `.mavatar` file.
+
 ## Live and streaming
 
 ![The Live page](docs/images/en/07-live.png)

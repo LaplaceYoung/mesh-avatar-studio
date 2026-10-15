@@ -38,6 +38,7 @@
         <a class="header-link" href="#make">作り方</a>
         <a class="header-link" href="#live">配信に使う</a>
         <a class="header-link" href="#embed">組み込む</a>
+        <a class="header-link" href="#apps">アプリ</a>
         <a class="header-link" href="https://github.com/shinshin86/mesh-avatar-studio">GitHub <span aria-hidden="true">↗</span></a>
       </nav>
       <a class="header-link language-switch" href="../" lang="en" hreflang="en">English</a>
@@ -251,6 +252,18 @@ avatar.setParameters({});
             </div>
           </div>
         </div>
+      </section>
+      <section id="apps" class="content-section" aria-labelledby="apps-title">
+        <div class="section-heading">
+          <p class="eyebrow">他のアプリで使う</p>
+          <h2 id="apps-title">mesh-avatar を組み込んだアプリで、そのまま動きます。</h2>
+          <p>ランタイムを使うアプリなら、書き出したファイルをそのまま読み込めます。その一例が <a href="https://github.com/shinshin86/aituber-onair">AITuber OnAir</a> です。AI VTuber や AI キャラクターを作るためのオープンソースの TypeScript ツールキットで、Mesh Avatar Chat サンプルは、アバターを LLM で会話するキャラクターとして動かし、音声に合わせて口を動かし、感情タグで表情を切り替え、配信のコメントにも反応します。</p>
+        </div>
+        <div class="apps-actions">
+          <a class="button primary" href="https://github.com/shinshin86/aituber-onair/tree/main/packages/core/examples/react-mesh-avatar-app">Mesh Avatar Chat サンプル <span aria-hidden="true">↗</span></a>
+          <a class="button secondary" href="https://github.com/shinshin86/aituber-onair">AITuber OnAir を GitHub で見る <span aria-hidden="true">↗</span></a>
+        </div>
+        <p class="section-note">サンプルの「設定 → アバター」から <code>.mavatar</code> ファイルを読み込みます。LLM や TTS の API キーはアプリ内で入力し、ブラウザの中にだけ保存されます。</p>
       </section>
     </main>
     <footer class="site-footer shell">

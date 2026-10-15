@@ -78,6 +78,12 @@ npm run dev
 
 受け取ったファイルは「プロジェクトを開く」の「.mavatar を取り込む」から選ぶか、その欄にドロップします。`projects/` の中に新しいフォルダが作られ、同名のフォルダがある場合は別の名前になります。取り込みには `npm run dev` が必要で、上限は128 MiBです。元画像を含めなかった場合は再生専用となり、編集やレイヤーの作り直しはできません。元画像を除いても、レイヤー画像はファイルに残ります。詳しくは[アバターの形式](docs/format.md)(英語)を参照してください。
 
+## 書き出したアバターを他のアプリで使う
+
+書き出した `.mavatar` ファイルは、`mesh-avatar` ランタイムを組み込んだアプリならどれでも読み込めます(自分のアプリに組み込む方法は[ランタイムのパッケージ](packages/runtime)(英語)を参照してください)。すでに対応しているアプリ:
+
+- [AITuber OnAir](https://github.com/shinshin86/aituber-onair): AI VTuber や AI キャラクターを作るためのオープンソースの TypeScript ツールキットです。[Mesh Avatar Chat のサンプル](https://github.com/shinshin86/aituber-onair/tree/main/packages/core/examples/react-mesh-avatar-app)は、アバターを LLM で会話するキャラクターとして動かし、音声に合わせて口を動かし、感情タグで表情を切り替え、YouTube や Twitch のコメントにも反応します。サンプルの「設定 → アバター」から `.mavatar` ファイルを読み込んでください。
+
 ## カメラで動かして配信する
 
 ![配信の操作画面](docs/images/ja/07-live.png)

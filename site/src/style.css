@@ -101,6 +101,7 @@ h3 { margin: 0; font-size: 18px; font-weight: 650; line-height: 1.4; letter-spac
 .section-note a { color: var(--ink); }
 .section-note code, .embed-details > p code { padding: 2px 5px; border-radius: 4px; background: var(--surface); color: var(--ink); font-size: .9em; }
 .live-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px; }
+.apps-actions { display: flex; flex-wrap: wrap; gap: 12px; }
 .live-copy { padding: 24px; }
 .embed-grid { display: grid; grid-template-columns: minmax(0, .8fr) minmax(0, 1.2fr); gap: 40px; align-items: start; }
 .runtime-facts { display: flex; flex-wrap: wrap; gap: 8px; list-style: none; padding: 0; margin: 0 0 24px; }
@@ -166,7 +167,8 @@ pre:focus-visible { outline: 2px solid #7aa2f7; outline-offset: -4px; }
   .brand { font-size: 15px; gap: 8px; }
   .brand-mark { width: 26px; height: 26px; }
   .header-link { font-size: 12px; }
-  .primary-nav { order: 1; width: 100%; justify-content: space-between; gap: 12px; margin-left: 0; }
+  .primary-nav { order: 1; width: 100%; flex-wrap: wrap; justify-content: space-between; gap: 0 12px; margin-left: 0; }
+  .header-link { white-space: nowrap; }
   .hero { grid-template-columns: minmax(0, 1fr); gap: 28px; padding-block: 36px 32px; }
   .hero-copy { padding-bottom: 0; }
   .eyebrow { margin-bottom: 16px; font-size: 11px; letter-spacing: 1.2px; }
@@ -174,6 +176,7 @@ pre:focus-visible { outline: 2px solid #7aa2f7; outline-offset: -4px; }
   .hero-pitch { margin-top: 20px; font-size: 21px; }
   .hero-description { font-size: 15px; line-height: 1.6; }
   .hero-actions { gap: 8px; margin-top: 24px; }
+  .apps-actions { gap: 8px; }
   .button { padding: 12px; font-size: 12px; gap: 8px; }
   .hero-note { font-size: 12px; }
   .avatar-stage { height: clamp(270px, 80vw, 310px); }

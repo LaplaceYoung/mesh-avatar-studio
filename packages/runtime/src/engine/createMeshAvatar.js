@@ -139,7 +139,7 @@ export async function createMeshAvatarImpl(canvas, options) {
   if (rig.hand) R.addLayer('hand', imgs.hand, handMesh);
 
   const physics = new Physics();
-  const motion = new Motion(rig.view.gazeCenter ?? [rig.head.cx, rig.head.cy]);
+  const motion = new Motion(rig.view.gazeCenter ?? [rig.head.cx, rig.head.cy], options.motionStyle);
   const listeners = new Set();
   motion.onMotion = id => { for (const fn of listeners) fn(id); };
 
@@ -247,6 +247,8 @@ export async function createMeshAvatarImpl(canvas, options) {
     setLighting(value) { R.setLighting(value); },
     getLightingStats() { return { ...R.lightingStats }; },
     setAutoMotion(on) { motion.autoMotion = !!on; },
+    /** Blend between classic motion and coupled lively motion over 0.3 seconds. */
+    setMotionStyle(style) { motion.setMotionStyle(style); },
     /** Hair / tassel sway multiplier (1 = default). */
     setSwayGain(g) { physics.gain = g; },
     /** Called with the motion id when a motion starts and with null when it ends. */

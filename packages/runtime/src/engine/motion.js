@@ -2,6 +2,7 @@
 import { PARAMS } from './rig.js';
 import { MOTIONS, IDLE_MOTIONS, ADDITIVE, sampleTrack } from './motions.js';
 import { VOWELS, kanaToMoras, sampleMoras } from './kana.js';
+import { LivelyMotion } from './lively-motion.js';
 
 const ALL_MOTIONS = { ...MOTIONS, ...IDLE_MOTIONS };
 // scales the head / body / arm tracks of idle motions (they are authored at full size, so 1)
@@ -59,8 +60,8 @@ const SPRINGS = {
 };
 
 export class Motion {
-  /** @param {number[]} gazeCenter */
-  constructor(gazeCenter) {
+  /** @param {number[]} gazeCenter @param {'classic' | 'lively'} [motionStyle] */
+  constructor(gazeCenter, motionStyle = 'classic') {
     this.mode = 'auto';           // auto | mouse | manual
     this.P = Object.fromEntries(PARAMS.map(p => [p.id, p.def]));
     this.manual = { ...this.P };
@@ -95,9 +96,19 @@ export class Motion {
     this.nextIdle = 3;
     this.lastAuto = null;
     this.onMotion = null;          // UI callback (id or null)
+    this.motionStyle = motionStyle;
+    this.lively = motionStyle === 'lively' ? new LivelyMotion(this, true) : null;
   }
 
   setExpression(k) { this.expr = k; }
+
+  setMotionStyle(style) {
+    if (style !== 'classic' && style !== 'lively') return;
+    if (style === this.motionStyle) return;
+    this.motionStyle = style;
+    if (!this.lively) this.lively = new LivelyMotion(this);
+    this.lively.setEnabled(style === 'lively');
+  }
 
   hasMotion(id) { return id in ALL_MOTIONS; }
 
@@ -233,6 +244,7 @@ export class Motion {
     if (this.mode === 'manual') {
       Object.assign(T, this.manual);
     } else if (this.mode === 'auto') {
+      if (this.lively) this.lively.classicGaze = [this.gaze.x, this.gaze.y];
       // wandering plus following the gaze: the eyes jump first, the head turns after them
       T.angleX = fbm(t * 0.18, 1) * 10 + this.gaze.x * 11;
       T.angleY = fbm(t * 0.15, 2) * 6 - 1 + this.gaze.y * 7;
@@ -286,6 +298,7 @@ export class Motion {
     if (this.mode !== 'manual') {
       T.breath = this.breathValue(dt);
       if (t < this.tap.until) T.fingerTap = Math.max(0, Math.sin((this.tap.until - t) * Math.PI * 3.6)) ** 2;
+      if (this.lively) this.lively.prepare(this, T, dt);
     }
 
     // motion: body/head tracks go into the targets, so the springs smooth them too
@@ -377,6 +390,10 @@ export class Motion {
       out.mouthOpen = Math.max(out.mouthOpen * 0.3, this.lipOpen);
       // while talking the voice decides the vowel; the expression's form would shift it
       out.mouthForm = clamp(this.lipForm, -1, 1);
+    }
+    if (this.lively && this.mode !== 'manual') {
+      this.lively.finish(this, out);
+      if (this.lively.mix === 0 && this.motionStyle === 'classic') this.lively = null;
     }
     this.P = out;
     return out;

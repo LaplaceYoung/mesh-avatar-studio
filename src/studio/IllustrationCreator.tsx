@@ -14,6 +14,22 @@ export function IllustrationCreator() {
   const [subject, setSubject] = useState('');
   const [removeBackground, setRemoveBackground] = useState(false);
   const [previewVariant, setPreviewVariant] = useState('source');
+  const [previewAvailable, setPreviewAvailable] = useState(false);
+  const [checkingArtifacts, setCheckingArtifacts] = useState(false);
+  useEffect(() => {
+    setPreviewAvailable(false);
+    if (!submittedProject || activity?.state !== 'completed') { setCheckingArtifacts(false); return; }
+    const controller = new AbortController();
+    setCheckingArtifacts(true);
+    void fetch(`/__studio/production-status?project=${encodeURIComponent(submittedProject)}`, { signal: controller.signal })
+      .then(async response => {
+        const data = await response.json();
+        if (!response.ok) throw new Error(data.error ?? 'Could not inspect production artifacts.');
+        if (!controller.signal.aborted) setPreviewAvailable(data.previewAvailable === true);
+      }).catch(reason => { if (!controller.signal.aborted) setError(String(reason)); })
+      .finally(() => { if (!controller.signal.aborted) setCheckingArtifacts(false); });
+    return () => controller.abort();
+  }, [submittedProject, activity]);
   useEffect(() => { setPreviewVariant('source'); }, [preview]);
   useEffect(() => {
     const receive = (event: Event) => {
@@ -83,7 +99,8 @@ export function IllustrationCreator() {
       <label className="creation-name">{zh ? '项目目录名' : 'Project directory name'}<Input value={name} onChange={event => setName(event.target.value)} status={validName ? undefined : 'error'} /></label>
       <small className="muted">{zh ? '使用英文字母、数字、横线或下划线；不覆盖已有项目。' : 'Use letters, numbers, hyphens or underscores. Existing projects are not overwritten.'}</small>
       <Checkbox checked={consent} onChange={event => setConsent(event.target.checked)}>{zh ? '同意所选 Agent 读取图片并交给其已配置的视觉模型处理（可能是云端）；不包含外部生图授权。' : 'Allow the selected agent to process this image with its configured vision model (possibly cloud-hosted). This does not authorize external image generation.'}</Checkbox>
-      {(submitted || activity?.state === 'failed') && <Alert type={activity?.state === 'failed' ? 'error' : activity?.state === 'completed' ? 'success' : 'info'} showIcon title={activity?.state === 'failed' ? zh ? `${submittedProject} 制作失败，可重试` : `${submittedProject} creation failed; retry available` : activity?.state === 'completed' ? zh ? `${submittedProject} 制作已完成` : `${submittedProject} creation completed` : activity?.state === 'working' ? zh ? `${submittedProject} 正在制作` : `${submittedProject} is being created` : zh ? `已提交 ${submittedProject}，等待 ACP 执行` : `Submitted ${submittedProject}; waiting for ACP`} description={activity?.message ?? (zh ? '制作任务已进入 Agent 队列。请在悬浮 Agent 窗口查看工具调用和阶段进度，不要重复提交。失败后此按钮会恢复。' : 'The task is queued for the Agent. Follow tool calls and stage progress in the floating Agent window; do not submit again. The button returns after a failure.')} action={activity?.state === 'completed' ? <Button size="small" onClick={() => window.dispatchEvent(new CustomEvent('studio:open-generated-project', { detail: submittedProject }))}>{zh ? '打开角色' : 'Open avatar'}</Button> : undefined} />}
+      {(submitted || activity?.state === 'failed') && <Alert type={activity?.state === 'failed' ? 'error' : 'info'} showIcon title={activity?.state === 'failed' ? zh ? `${submittedProject} 制作失败，可重试` : `${submittedProject} creation failed; retry available` : activity?.state === 'completed' ? zh ? `${submittedProject} 的 Agent 回合已结束` : `${submittedProject}: Agent turn ended` : activity?.state === 'working' ? zh ? `${submittedProject} 正在制作` : `${submittedProject} is being created` : zh ? `已提交 ${submittedProject}，等待 ACP 执行` : `Submitted ${submittedProject}; waiting for ACP`} description={activity?.message ?? (zh ? '制作任务已进入 Agent 队列。请在悬浮 Agent 窗口查看工具调用和阶段进度，不要重复提交。失败后此按钮会恢复。' : 'The task is queued for the Agent. Follow tool calls and stage progress in the floating Agent window; do not submit again. The button returns after a failure.')} action={activity?.state === 'completed' ? <Button size="small" loading={checkingArtifacts} disabled={!previewAvailable || checkingArtifacts} onClick={() => window.dispatchEvent(new CustomEvent('studio:open-generated-project', { detail: submittedProject }))}>{zh ? '打开可用预览' : 'Open available preview'}</Button> : undefined} />}
+      {activity?.state === 'completed' && <small className="muted">{checkingArtifacts ? zh ? '正在检查磁盘产物…' : 'Inspecting artifacts…' : previewAvailable ? zh ? '预览文件已就绪，不代表完整制作或视觉验收通过。' : 'Preview files are ready; this does not establish pipeline completion or visual approval.' : zh ? '尚无可打开的预览，请在 Agent 窗口查看缺失阶段并继续。' : 'No preview is available yet. Inspect missing stages in the Agent window and continue.'}</small>}
       <Button type="primary" loading={busy} disabled={!consent || !validName || busy || submitted} onClick={() => { void prepare(); }}>{submitted ? zh ? '已提交，等待执行' : 'Submitted; waiting' : zh ? '开始 AI 制作' : 'Start AI creation'}</Button>
     </>}
     <Steps size="small" orientation="vertical" current={-1} items={(zh ? ['区域识别与坐标校准', '绑定、蒙版与图层构建', '动作审查与缺陷修正', '打开编辑器 / 直播'] : ['Inspect and calibrate', 'Rig and build layers', 'Review and correct motion', 'Open in editor / Live']).map(title => ({ title }))} />

@@ -29,7 +29,8 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
   const [error, setError] = useState('');
   const autoContinueTurns = useRef(0);
   const autoContinuePending = useRef(false);
-  const autoContinueAfter = useRef('');
+  const autoContinueAfter = useRef(0);
+  const continuationDispatch = useRef(false);
   const autoContinueSignature = useRef('');
   useEffect(() => {
     setActivity(undefined);
@@ -40,7 +41,7 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
     } catch { setActivity(undefined); }
   }, [task?.projectName]);
   useEffect(() => {
-    const receive = (event: Event) => { const detail = (event as CustomEvent<CreationTask>).detail; if (detail && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(detail.projectName)) { setTask(detail); setStatus(undefined); autoContinueTurns.current = 0; autoContinuePending.current = false; autoContinueSignature.current = ''; } };
+    const receive = (event: Event) => { const detail = (event as CustomEvent<CreationTask>).detail; if (detail && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(detail.projectName)) { setTask(detail); setStatus(undefined); if (!continuationDispatch.current) { autoContinueTurns.current = 0; autoContinueSignature.current = ''; } autoContinuePending.current = false; } };
     window.addEventListener('studio:creation-task', receive);
     return () => window.removeEventListener('studio:creation-task', receive);
   }, []);
@@ -69,27 +70,26 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
       if (detail?.projectName === task?.projectName) {
         setActivity(detail);
         savePreference(`studio-production-activity:${detail.projectName}`, JSON.stringify(detail));
-        if (detail.state === 'completed' && task.autoContinue) { autoContinuePending.current = true; autoContinueAfter.current = status?.checkedAt ?? ''; setRefreshTick(value => value + 1); }
+        if (detail.state === 'completed' && task.autoContinue) { autoContinuePending.current = true; autoContinueAfter.current = Date.now(); setRefreshTick(value => value + 1); }
         if (detail.state === 'failed') autoContinuePending.current = false;
       }
     };
     window.addEventListener('studio:production-activity', receive);
     return () => window.removeEventListener('studio:production-activity', receive);
   }, [task?.projectName, task?.autoContinue]);
-  if (!task) return null;
   const titles = zh ? { source: '原图', regions: '区域观察', draft: '绑定草稿', rig: '正式绑定', layers: '图层文件', review: '姿态审查图' } : { source: 'Source', regions: 'Regions', draft: 'Draft rig', rig: 'Final rig', layers: 'Layer files', review: 'Pose images' };
   const nextStage = status?.stages.find(stage => stage.state !== 'observed');
   const orderedStages = status?.stages ?? [];
   const activeIndex = orderedStages.findIndex(stage => stage.state !== 'observed');
   const needsSignoff = !!status && !nextStage && status.visualReview !== 'approved';
-  const autoContinuationQueued = autoContinuePending.current && !!task.autoContinue;
+  const autoContinuationQueued = autoContinuePending.current && !!task?.autoContinue;
   const resume = () => {
-    if (!status || !nextStage) return;
+    if (!task || !status || !nextStage) return;
     autoContinuePending.current = false;
     const taskText = nextStage.id === 'source'
       ? `先创建项目骨架：确认 ${task.source} 是当前上传的本地 PNG，运行 uv run tools/new-project.py ${task.source} ${task.projectName}；如果目标目录已存在，停止并报告，不要覆盖。创建后检查 source.png 与输入尺寸和 SHA-256 一致，再进入区域证据阶段。`
       : status.nextAction?.instruction ?? `请处理 ${titles[nextStage.id]} 阶段：检查当前项目文件和视觉证据，完成后运行对应校验。`;
-    window.dispatchEvent(new CustomEvent('studio:agent-start', { detail: { prompt: `请继续完成项目 projects/${task.projectName} 的完整 Live 2D-style 网格角色制作，不要从头猜测，也不要覆盖已有有效文件。
+    window.dispatchEvent(new CustomEvent('studio:agent-start', { cancelable: true, detail: { prompt: `请继续完成项目 projects/${task.projectName} 的完整 Live 2D-style 网格角色制作，不要从头猜测，也不要覆盖已有有效文件。
 
 当前最早未完成阶段是「${titles[nextStage.id]}」：
 ${taskText}
@@ -99,7 +99,7 @@ ${taskText}
 最后报告实际执行的命令、文件、完整链路停在哪个阶段，以及仍未通过的视觉问题。`, projectName: task.projectName, source: task.source, autoContinue: task.autoContinue === true } }));
   };
   useEffect(() => {
-    if (!autoContinuePending.current || !task.autoContinue || productionBusy || !status || status.checkedAt === autoContinueAfter.current) return;
+    if (!autoContinuePending.current || !task?.autoContinue || productionBusy || !status || Date.parse(status.checkedAt) <= autoContinueAfter.current) return;
     if (!status.stages.some(stage => stage.state !== 'observed')) {
       autoContinuePending.current = false;
       return;
@@ -117,8 +117,10 @@ ${taskText}
     }
     autoContinueSignature.current = signature;
     autoContinueTurns.current += 1;
-    resume();
+    continuationDispatch.current = true;
+    try { resume(); } finally { continuationDispatch.current = false; }
   }, [status, productionBusy, task, zh]);
+  if (!task) return null;
   return <div className="production-progress"><Collapse ghost defaultActiveKey={['production']} items={[{ key: 'production', label: <Space><strong>{zh ? '制作产物' : 'Production artifacts'}</strong><small>{task.projectName}</small></Space>, children: <>
     {error && <Alert type="warning" title={error} />}
     {autoContinuationQueued && <Alert className="production-activity" type="info" showIcon title={zh ? '自动续跑已排队' : 'Automatic continuation queued'} description={zh ? '正在等待最新生产状态，确认阶段确实发生变化后再提交下一轮 ACP 任务。' : 'Waiting for the latest production status; the next ACP turn will start only after a real stage change is observed.'} />}
@@ -135,6 +137,6 @@ ${taskText}
     {status?.nextAction && <Alert className="production-next-action" type="warning" showIcon message={zh ? `下一步：${titles[status.nextAction.stage]}` : `Next: ${titles[status.nextAction.stage]}`} description={<><span>{status.nextAction.reason}</span><br /><small>{status.nextAction.instruction}</small></>} />}
     <small className="muted">{status?.visualReview === 'approved' ? `${zh ? '用户已确认视觉审查：' : 'Visual review approved by user: '}${status.visualReviewAt ?? ''}` : zh ? '尚未确认视觉审查。' : 'Visual review not approved.'}</small>
     <small className="muted">{zh ? '检查磁盘文件和基础格式，不代表视觉审查通过。原图/绑定更新后需重新构建和审查。' : 'Checks files and basic formats, not visual quality. Rebuild/review after input changes.'}</small>
-    <Space wrap><Button type="primary" disabled={!nextStage || productionBusy} onClick={resume}>{productionBusy ? zh ? '制作执行中…' : 'Production running…' : nextStage ? zh ? `继续全链路：${titles[nextStage.id]}` : `Continue full pipeline: ${titles[nextStage.id]}` : needsSignoff ? zh ? '等待人工视觉确认' : 'Awaiting visual sign-off' : zh ? '制作阶段已完成' : 'All stages complete'}</Button>{task.autoContinue && nextStage && <Button disabled={productionBusy} onClick={() => { autoContinuePending.current = false; setTask(current => current ? { ...current, autoContinue: false } : current); }}>{zh ? `停止自动续跑（${autoContinueTurns.current}/${MAX_AUTO_CONTINUE_TURNS}）` : `Stop auto-continue (${autoContinueTurns.current}/${MAX_AUTO_CONTINUE_TURNS})`}</Button>}<Button disabled={!status?.stages.some(stage => stage.id === 'regions' && stage.files.some(file => file.includes('overview.png')))} onClick={() => { setFocusRegion(undefined); setEvidenceOpen(true); }}>{zh ? '查看区域证据' : 'View region evidence'}</Button><Button onClick={() => setReviewOpen(true)}>{zh ? '查看姿态 / 反馈缺陷' : 'Review poses / report defects'}</Button><Button loading={signoffBusy} disabled={!status || status.visualReview === 'approved' || status.stages.find(stage => stage.id === 'review')?.state !== 'observed'} onClick={async () => { setSignoffBusy(true); try { const response = await fetch(`/__studio/production-signoff?project=${encodeURIComponent(task.projectName)}`, { method: 'POST', headers: { 'X-Studio-Request': '1', Origin: location.origin } }); if (!response.ok) throw new Error((await response.json()).error); const refreshed = await fetch(`/__studio/production-status?project=${encodeURIComponent(task.projectName)}`).then(response => response.json()); setStatus(refreshed); } catch (reason) { setError(String(reason)); } finally { setSignoffBusy(false); } }}>{status?.visualReview === 'approved' ? zh ? '已确认' : 'Approved' : zh ? '确认视觉审查通过' : 'Approve visual review'}</Button><Button disabled={!status?.previewAvailable} onClick={() => window.dispatchEvent(new CustomEvent('studio:open-generated-project', { detail: task.projectName }))}>{zh ? '打开生成的角色' : 'Open avatar'}</Button><Button type="text" onClick={() => setTask(undefined)}>{zh ? '隐藏进度' : 'Hide progress'}</Button></Space>
+    <Space wrap><Button type="primary" disabled={!nextStage || productionBusy} onClick={resume}>{productionBusy ? zh ? '制作执行中…' : 'Production running…' : nextStage ? zh ? `继续全链路：${titles[nextStage.id]}` : `Continue full pipeline: ${titles[nextStage.id]}` : needsSignoff ? zh ? '等待人工视觉确认' : 'Awaiting visual sign-off' : zh ? '制作阶段已完成' : 'All stages complete'}</Button>{task.autoContinue && nextStage && <Button onClick={() => { autoContinuePending.current = false; setTask(current => current ? { ...current, autoContinue: false } : current); }}>{zh ? `停止自动续跑（${autoContinueTurns.current}/${MAX_AUTO_CONTINUE_TURNS}）` : `Stop auto-continue (${autoContinueTurns.current}/${MAX_AUTO_CONTINUE_TURNS})`}</Button>}<Button disabled={!status?.stages.some(stage => stage.id === 'regions' && stage.files.some(file => file.includes('overview.png')))} onClick={() => { setFocusRegion(undefined); setEvidenceOpen(true); }}>{zh ? '查看区域证据' : 'View region evidence'}</Button><Button onClick={() => setReviewOpen(true)}>{zh ? '查看姿态 / 反馈缺陷' : 'Review poses / report defects'}</Button><Button loading={signoffBusy} disabled={!status || status.visualReview === 'approved' || status.stages.find(stage => stage.id === 'review')?.state !== 'observed'} onClick={async () => { setSignoffBusy(true); try { const response = await fetch(`/__studio/production-signoff?project=${encodeURIComponent(task.projectName)}`, { method: 'POST', headers: { 'X-Studio-Request': '1', Origin: location.origin } }); if (!response.ok) throw new Error((await response.json()).error); const refreshed = await fetch(`/__studio/production-status?project=${encodeURIComponent(task.projectName)}`).then(response => response.json()); setStatus(refreshed); } catch (reason) { setError(String(reason)); } finally { setSignoffBusy(false); } }}>{status?.visualReview === 'approved' ? zh ? '已确认' : 'Approved' : zh ? '确认视觉审查通过' : 'Approve visual review'}</Button><Button disabled={!status?.previewAvailable} onClick={() => window.dispatchEvent(new CustomEvent('studio:open-generated-project', { detail: task.projectName }))}>{zh ? '打开生成的角色' : 'Open avatar'}</Button><Button type="text" onClick={() => setTask(undefined)}>{zh ? '隐藏进度' : 'Hide progress'}</Button></Space>
   </> }]} /><RegionEvidenceReview project={task.projectName} stage={status?.stages.find(stage => stage.id === 'regions')} open={evidenceOpen} focusRegion={focusRegion} onClose={() => setEvidenceOpen(false)} /><PoseReview project={task.projectName} stage={status?.stages.find(stage => stage.id === 'review')} open={reviewOpen} onClose={() => setReviewOpen(false)} /></div>;
 }

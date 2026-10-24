@@ -20,9 +20,11 @@ export function illustrationUpload(root: string): Plugin {
       if (req.method === 'GET') {
         const id = pathname.slice('/__studio/illustrations/'.length);
         if (!/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(id)) return reply(400, { error: 'Invalid upload id.' });
+        const variant = url.searchParams.get('variant') ?? 'source';
+        if (variant !== 'source' && variant !== 'original') return reply(400, { error: 'Invalid image variant.' });
         try {
           const repository = await realpath(root), directory = join(repository, 'projects', '.uploads', id);
-          const actual = await realpath(join(directory, 'source.png'));
+          const actual = await realpath(join(directory, `${variant}.png`));
           if (!actual.startsWith(directory + sep)) return reply(403, { error: 'Image must stay in its upload directory.' });
           const info = await stat(actual);
           if (!info.isFile() || info.size > MAX_BYTES) return reply(413, { error: 'Invalid image size.' });

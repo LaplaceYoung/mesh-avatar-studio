@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Checkbox, Image, Input, Space, Steps, Upload } from 'antd';
+import { Alert, Button, Checkbox, Image, Input, Segmented, Space, Steps, Upload } from 'antd';
 import { InboxOutlined } from '@ant-design/icons';
 import { useI18n } from '../editor/i18n';
 
@@ -13,7 +13,8 @@ export function IllustrationCreator() {
   const [activity, setActivity] = useState<{ state: 'starting' | 'working' | 'completed' | 'failed'; message?: string }>();
   const [subject, setSubject] = useState('');
   const [removeBackground, setRemoveBackground] = useState(false);
-  useEffect(() => () => { if (preview) URL.revokeObjectURL(preview); }, [preview]);
+  const [previewVariant, setPreviewVariant] = useState('source');
+  useEffect(() => { setPreviewVariant('source'); }, [preview]);
   useEffect(() => {
     const receive = (event: Event) => {
       const detail = (event as CustomEvent<{ projectName?: string; state?: string; message?: string }>).detail;
@@ -72,8 +73,10 @@ export function IllustrationCreator() {
     </Upload.Dragger>
     {error && <Alert type="error" title={error} />}
     {upload && <>
+      {upload.backgroundProcessed && <small className="muted">{zh ? '棋盘格仅为透明预览背景。切换对比并点击放大，检查发丝和衣服边缘；切换预览不会改变制作底图。' : 'Checkerboard indicates transparency. Compare and enlarge to inspect hair and clothing edges; switching previews does not change the production source.'}</small>}
       {upload.warning && <Alert type="warning" title={zh ? '已尝试去背景，请检查轮廓、白发和衣服边缘。未处理原图已保留为 original.png。' : upload.warning} />}
-      <div className="illustration-summary"><Image src={preview} width={100} alt={zh ? '已上传的原图' : 'Uploaded illustration'} /><div><strong>{upload.width} × {upload.height}</strong><p className="muted">{zh ? '图片已保存，仅在本机。' : 'Image saved locally.'}</p></div></div>
+      {upload.backgroundProcessed && <Segmented aria-label={zh ? '背景处理对比' : 'Background processing comparison'} value={previewVariant} onChange={setPreviewVariant} options={[{ value: 'source', label: zh ? '制作底图' : 'Production source' }, { value: 'original', label: zh ? '未处理原图' : 'Original' }]} />}
+      <div className="illustration-summary"><div className="illustration-alpha-preview"><Image src={`${preview}?variant=${previewVariant}`} width={180} alt={previewVariant === 'original' ? zh ? '未处理原图' : 'Original illustration' : zh ? '实际制作底图' : 'Production source'} /></div><div><strong>{upload.width} × {upload.height}</strong><p className="muted">{zh ? '图片已保存，仅在本机。' : 'Image saved locally.'}</p></div></div>
       {upload.preflight && <div className="image-preflight"><strong>{zh ? '源图预检' : 'Source preflight'}</strong><span>{zh ? `主体估计框 ${upload.preflight.estimatedContentBox.join(' · ')}` : `Estimated subject box ${upload.preflight.estimatedContentBox.join(' · ')}`}</span><span>{zh ? `边缘背景一致性 ${(upload.preflight.borderUniformity * 100).toFixed(1)}%` : `Border uniformity ${(upload.preflight.borderUniformity * 100).toFixed(1)}%`}</span>{upload.preflight.warnings.map(warning => <small key={warning}>{warning}</small>)}</div>}
       {!upload.transparent && <Alert type="warning" title={zh ? '原图没有透明像素，背景可能影响分层质量。' : 'Opaque background may reduce layer quality.'} />}
       {upload.height < 800 && <Alert type="warning" title={zh ? '图片低于 800 px 高，眼部轮廓识别可能不够精细。' : 'Below 800 px tall: eye contour detail may be insufficient.'} />}

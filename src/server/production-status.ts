@@ -17,11 +17,35 @@ const regionAliases = {
   body: new Set(['body', 'shoulders', 'shoulders_body', 'chest']),
 };
 function hasRegion(names: Set<string>, required: Set<string>) { return [...required].some(name => names.has(name)); }
+function regionGeometryIssues(region: { name: string; box: number[] }, width: number, height: number) {
+  const [x0, y0, x1, y1] = region.box;
+  const regionWidth = x1 - x0, regionHeight = y1 - y0;
+  const issues: string[] = [];
+  const minimums: Record<string, [number, number]> = {
+    left_eye: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    right_eye: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    eye_left: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    eye_right: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    eye0: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    eye1: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    eye_a: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    eye_b: [Math.max(8, Math.round(width * 0.008)), Math.max(4, Math.round(height * 0.004))],
+    mouth: [Math.max(12, Math.round(width * 0.012)), Math.max(5, Math.round(height * 0.005))],
+  };
+  const minimum = minimums[region.name];
+  if (minimum && (regionWidth < minimum[0] || regionHeight < minimum[1])) issues.push(`${region.name} box ${regionWidth}x${regionHeight}px is too small for reliable local evidence; inspect a tighter source crop before rigging.`);
+  if ((region.name === 'left_eye' || region.name === 'right_eye' || region.name.startsWith('eye_') || /^eye[01ab]$/.test(region.name)) && regionWidth > regionHeight * 14) issues.push(`${region.name} box is unusually wide (${regionWidth}x${regionHeight}px); verify that it contains the eyelid and iris rather than a face strip.`);
+  if (region.name === 'mouth' && regionWidth > regionHeight * 18) issues.push(`mouth box is unusually wide (${regionWidth}x${regionHeight}px); verify the lips and chin boundary in the detail crop.`);
+  return issues;
+}
 function actionFor(stage: ProductionStage, name: string) {
   const lowConfidence = stage.issues.find(issue => issue.startsWith('Low-confidence regions require visual review:'));
+  const geometryIssue = stage.issues.find(issue => issue.includes('box') && (issue.includes('too small') || issue.includes('unusually wide')));
   const instruction: Record<ProductionStage['id'], string> = {
     source: `使用创建任务提供的本地源图运行 uv run tools/new-project.py <source.png> ${name}，确认 source.png 与上传源图尺寸和 SHA-256 一致。`,
-    regions: lowConfidence
+    regions: geometryIssue
+      ? `先处理区域几何诊断：${geometryIssue}。打开 source.png 和对应的 detail/grid，确认框是否只覆盖实际部件；修正 regions.json 后重新运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并复查 overview/detail/grid。不要仅为通过检查而扩大或缩小框。`
+      : lowConfidence
       ? `先打开并逐张检查当前 work/vision-* 的 overview、detail 和 grid，重点复核 ${lowConfidence.replace('Low-confidence regions require visual review: ', '')}。只有实际查看局部坐标后，才能修正 regions.json 的 box/observation/confidence；再运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并重新检查 overview/detail/grid。不要把 low confidence 直接改成 high。`
       : `重新逐区查看 source.png，补齐核心区域并确保左右眼和 mouth 都使用 step=5 或更细，然后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
     draft: `读取当前 regions.json 和匹配的 work/vision-* 证据包，完善 rig.draft.json，运行 validate-rig、overlay 和眼部放大叠加。`,
@@ -89,6 +113,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     }
     const missing = Object.entries(regionAliases).filter(([, aliases]) => !hasRegion(names, aliases)).map(([key]) => key);
     if (missing.length) throw new Error(`Missing core visual regions: ${missing.join(', ')}. Add observed source-coordinate regions before rigging.`);
+    const geometryIssues = regions.flatMap(region => regionGeometryIssues(region as { name: string; box: number[] }, source!.width, source!.height));
+    if (geometryIssues.length) result.issues.push(...geometryIssues.slice(0, 8));
     const leftEye = [...regionAliases.leftEye].find(name => names.has(name)), rightEye = [...regionAliases.rightEye].find(name => names.has(name));
     if (leftEye && regions.find(region => region.name === leftEye)?.step > 5) throw new Error('The image-left eye region must use a grid step of 5 px or finer.');
     if (rightEye && regions.find(region => region.name === rightEye)?.step > 5) throw new Error('The image-right eye region must use a grid step of 5 px or finer.');

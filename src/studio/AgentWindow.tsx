@@ -20,6 +20,7 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
   const { language } = useI18n();
   const zh = language === 'zh';
   const titleId = useId();
+  const windowId = `${titleId}-window`;
   const [settings] = useState(readSettings);
   const [expanded, setExpanded] = useState(settings.expanded ?? false);
   const [position, setPosition] = useState<{ x: number; y: number } | undefined>(settings.position);
@@ -78,10 +79,10 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
   const statusLabel = status ? statusLabels[status]?.[zh ? 0 : 1] ?? status : '';
   const active = status === 'starting' || status === 'working' || status === 'configuring';
   return <>
-    {!open && <Button ref={launcherRef} className={`agent-launcher${active ? ' agent-launcher-active' : ''}`} type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-label={zh ? `展开 Agent 对话${statusLabel ? `，${statusLabel}` : ''}` : `Open agent conversation${statusLabel ? `, ${statusLabel}` : ''}`}>
+    {!open && <Button ref={launcherRef} className={`agent-launcher${active ? ' agent-launcher-active' : ''}`} type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-expanded={open} aria-controls={windowId} aria-label={zh ? `展开 Agent 对话${statusLabel ? `，${statusLabel}` : ''}` : `Open agent conversation${statusLabel ? `, ${statusLabel}` : ''}`}>
       Agent{statusLabel && <span className="agent-launcher-status">{statusLabel}</span>}
     </Button>}
-    <section ref={windowRef} className={`agent-window${expanded ? ' agent-window-expanded' : ''}`} hidden={!open}
+    <section id={windowId} ref={windowRef} className={`agent-window${expanded ? ' agent-window-expanded' : ''}`} hidden={!open}
       role="dialog" aria-modal="false" aria-labelledby={titleId} aria-label={zh ? 'Agent 对话窗口' : 'Agent conversation window'}
       style={style}>
       <header ref={titlebarRef} tabIndex={-1} className="agent-window-titlebar"

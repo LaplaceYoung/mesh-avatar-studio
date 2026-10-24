@@ -1,4 +1,5 @@
-import { open, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { createHash } from 'node:crypto';
+import { open, readFile, realpath, readdir, stat, writeFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import type { Plugin } from 'vite';
 import { validateRig } from '../../packages/runtime/src/index';
@@ -34,6 +35,10 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const value = JSON.parse(await readFile(actual, 'utf8'));
     result.files.push(file); return value;
   }
+  async function sourceHash() {
+    const file = join(project, 'source.png');
+    return createHash('sha256').update(await readFile(file)).digest('hex');
+  }
   async function png(file: string, result: ProductionStage) {
     const { actual, modified } = await checkedFile(file, 64 * 1024 * 1024);
     const handle = await open(actual, 'r');
@@ -53,6 +58,26 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
       if (!region || typeof region !== 'object' || !Array.isArray(region.box) || region.box.length !== 4 || !region.box.every(Number.isInteger) || typeof region.observation !== 'string' || !region.observation.trim()) throw new Error('Region needs source coordinates and a visual observation.');
       const [x0, y0, x1, y1] = region.box;
       if (!source || !(0 <= x0 && x0 < x1 && x1 <= source.width && 0 <= y0 && y0 < y1 && y1 <= source.height)) throw new Error('Region lies outside the current source image.');
+    }
+    const expectedHash = await sourceHash();
+    const work = join(project, 'work');
+    let evidence: string | undefined;
+    try {
+      for (const entry of await readdir(work)) if (/^vision-[a-f0-9]{12}$/.test(entry)) {
+        const candidate = join(work, entry, 'manifest.json');
+        try {
+          const manifest = JSON.parse(await readFile(candidate, 'utf8')) as { sourceSha256?: unknown; sourceSize?: unknown; regions?: unknown };
+          if (manifest.sourceSha256 === expectedHash && Array.isArray(manifest.sourceSize) && manifest.sourceSize[0] === source?.width && manifest.sourceSize[1] === source?.height && Array.isArray(manifest.regions) && manifest.regions.length === regions.length) evidence = candidate;
+        } catch { /* Ignore incomplete evidence folders and inspect the next one. */ }
+      }
+    } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+    if (!evidence) throw new Error('No evidence manifest matches the current source hash and regions. Run tools/vision-regions.py again.');
+    const manifest = JSON.parse(await readFile(evidence, 'utf8')) as { regions: { detail?: unknown; grid?: unknown }[] };
+    result.files.push(evidence.replace(project + sep, ''));
+    for (const region of manifest.regions) {
+      if (typeof region.detail !== 'string' || typeof region.grid !== 'string') throw new Error('Evidence manifest is missing a detail or grid image.');
+      await png(`work/${evidence.split(`${sep}work${sep}`)[1].split(sep)[0]}/${region.detail}`, result);
+      await png(`work/${evidence.split(`${sep}work${sep}`)[1].split(sep)[0]}/${region.grid}`, result);
     }
   });
   for (const id of ['draft', 'rig'] as const) await stage(id, async result => {

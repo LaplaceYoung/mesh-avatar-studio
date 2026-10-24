@@ -11,10 +11,17 @@ import { readPreference, savePreference } from '../editor/preferences';
 type Provider = 'claude' | 'codex' | 'pi';
 type Session = { id: string; token: string; provider: Provider };
 const SESSION_KEY = 'studio-acp-session';
+const TURN_KEY = 'studio-acp-production-turn';
 function readSavedSession(): Session | undefined {
   try {
     const value = JSON.parse(readPreference(SESSION_KEY) ?? 'null');
     return value && /^[a-f0-9]{32}$/.test(value.id) && typeof value.token === 'string' && value.token.length === 64 && ['claude', 'codex', 'pi'].includes(value.provider) ? value : undefined;
+  } catch { return undefined; }
+}
+function readSavedTurn() {
+  try {
+    const value = JSON.parse(readPreference(TURN_KEY) ?? 'null');
+    return value && typeof value.sessionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value.projectName) ? { sessionId: value.sessionId, projectName: value.projectName } : undefined;
   } catch { return undefined; }
 }
 type Entry = { id: string; kind: 'user' | 'assistant' | 'tool' | 'plan'; text: string; status?: string; detail?: string };
@@ -28,11 +35,13 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const [provider, setProvider] = useState<Provider>('claude');
   const [providers, setProviders] = useState<{ id: Provider; available: boolean }[]>([]);
   const [session, setSession] = useState<Session | undefined>(readSavedSession);
-  const [status, setStatus] = useState(() => readSavedSession() ? 'starting' : 'idle');
+  const savedSession = readSavedSession();
+  const savedTurn = readSavedTurn();
+  const [status, setStatus] = useState(() => savedSession ? 'starting' : 'idle');
   const [pendingCreation, setPendingCreation] = useState<{ prompt: string; projectName: string; source: string }>();
   const pendingRef = useRef<typeof pendingCreation>(undefined);
-  const productionTurn = useRef(false);
-  const productionProject = useRef('');
+  const productionTurn = useRef(!!savedTurn && !!savedSession && savedTurn.sessionId === savedSession.id);
+  const productionProject = useRef(savedTurn?.projectName ?? '');
   const [config, setConfig] = useState<SessionConfigOption[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]), [permissions, setPermissions] = useState<Permission[]>([]);
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
@@ -45,6 +54,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     if (!productionProject.current) return;
     window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName: productionProject.current, state, message, at: new Date().toISOString() } }));
   };
+  const clearProductionTurn = () => { productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); };
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
   const start = async () => {
     setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);
@@ -78,7 +88,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
     // Consume before sending. Reconnection must not silently duplicate a creation request.
-    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
+    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
     socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));
     pinned.current = true;
   }, [status, pendingCreation]);
@@ -93,15 +103,15 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (event.type === 'exit') {
         setStatus('exited');
         savePreference(SESSION_KEY, '');
-        if (productionTurn.current) { productionTurn.current = false; emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.'); }
+        if (productionTurn.current) { clearProductionTurn(); emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.'); }
       }
-      if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { productionTurn.current = false; emitActivity('failed', event.message ?? 'Agent error'); } setStatus(current => current === 'configuring' ? 'ready' : current); }
+      if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { clearProductionTurn(); emitActivity('failed', event.message ?? 'Agent error'); } setStatus(current => current === 'configuring' ? 'ready' : current); }
       if (event.type === 'complete') {
         streamId.current = null; setStatus('ready');
         // ACP completion means the turn ended, not that visual approval exists.
         // Only inspect artifacts here. The socket callback can outlive the editor
         // state it captured; reloading that editor must remain an explicit action.
-        if (productionTurn.current) { productionTurn.current = false; emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.'); window.dispatchEvent(new Event('studio:production-refresh')); }
+        if (productionTurn.current) { clearProductionTurn(); emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.'); window.dispatchEvent(new Event('studio:production-refresh')); }
       }
       if (event.type === 'permission' && event.id && event.options) setPermissions(items => [...items.filter(p => p.id !== event.id), event as Permission]);
       if (event.type === 'permission_resolved') setPermissions(items => items.filter(p => p.id !== event.id));
@@ -132,7 +142,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     ws.onmessage = event => { try { apply(JSON.parse(event.data)); } catch { setError('Invalid ACP event'); } };
     ws.onerror = () => setError(zh ? '连接失败；如果会话已过期，请重新连接 Agent。' : 'Connection failed; reconnect if the ACP session expired.');
     ws.onclose = event => {
-      if (event.code === 1008) { savePreference(SESSION_KEY, ''); setSession(undefined); setStatus('idle'); setError(zh ? 'ACP 会话已过期，请重新连接。' : 'ACP session expired; reconnect to start a new session.'); return; }
+      if (event.code === 1008) { savePreference(SESSION_KEY, ''); clearProductionTurn(); setSession(undefined); setStatus('idle'); setError(zh ? 'ACP 会话已过期，请重新连接。' : 'ACP session expired; reconnect to start a new session.'); return; }
       setStatus(current => current === 'exited' ? current : 'disconnected');
       if (productionTurn.current) {
         emitActivity('working', zh ? 'ACP 连接暂时断开，正在尝试恢复原制作任务。' : 'ACP connection lost; attempting to resume the existing production turn.');
@@ -152,7 +162,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       <Space wrap><Select aria-label="Agent" value={provider} disabled={!!session && status !== 'exited'} onChange={setProvider} style={{ width: 142 }} options={(providers.length ? providers : (Object.keys(labels) as Provider[]).map(id => ({ id, available: true }))).map(p => ({ value: p.id, label: `${labels[p.id]}${p.available ? '' : zh ? ' · 未安装' : ' · missing'}`, disabled: !p.available }))} />
         {(!session || status === 'exited') && <Button type="primary" loading={status === 'starting'} onClick={() => { void start(); }}>{zh ? '连接' : 'Connect'}</Button>}
         {status === 'disconnected' && <Button onClick={() => { setError(''); setAttempt(value => value + 1); }}>{zh ? '重连' : 'Reconnect'}</Button>}
-        {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { savePreference(SESSION_KEY, ''); setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
+        {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { savePreference(SESSION_KEY, ''); clearProductionTurn(); setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
         <Button icon={<ReloadOutlined />} onClick={onRefresh} aria-label={zh ? '刷新项目' : 'Refresh project'} />
       </Space></div>
     {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => { pendingRef.current = undefined; setPendingCreation(undefined); }}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}
@@ -177,7 +187,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     </div>)}
     <div className="agent-composer"><Space wrap><Checkbox checked={context} onChange={e => setContext(e.target.checked)}>{zh ? '附带当前上下文' : 'Include context'}</Checkbox><span className="muted">{project}{selection ? ` / ${selection}` : ''}</span></Space>
       <Sender value={draft} onChange={setDraft} disabled={!active} loading={status === 'working'} onCancel={() => send({ type: 'cancel' })} placeholder={zh ? '描述任务…' : 'Describe a task…'} autoSize={{ minRows: 2, maxRows: 6 }} onSubmit={value => {
-        if (!value.trim() || status !== 'ready') return;
+        if (!value.trim() || status !== 'ready' || productionTurn.current) { if (productionTurn.current) setError(zh ? '制作任务正在恢复，请等待完成后再发送普通消息。' : 'A production turn is being recovered; wait for it to finish before sending another message.'); return; }
         const text = (context ? `Project: ${project}\nSelected part: ${selection ?? 'none'}\nUnsaved editor changes may not be on disk. Follow AGENTS.md. Never send images to external services without user consent.\n\n` : '') + value;
         if (send({ type: 'prompt', text })) { productionTurn.current = false; setDraft(''); setStatus('working'); pinned.current = true; }
       }} />

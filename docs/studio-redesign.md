@@ -333,3 +333,11 @@ up to three times with increasing short delays. The retry only sends `attach` fo
 the existing capability; it never replays the production prompt. After the limit,
 the dock asks the user to reconnect manually. A provider process exit or expired
 capability remains terminal and clears the session rather than retrying forever.
+
+## Production turn persistence
+
+The dock persists a minimal production-turn marker containing only the ACP session
+id and project name. On reload it restores the busy guard and reattaches the
+existing session without replaying the prompt. Completion, provider exit, session
+expiry, and explicit stop clear the marker. A historical activity record alone
+never disables ordinary recovery or creates a live execution claim.

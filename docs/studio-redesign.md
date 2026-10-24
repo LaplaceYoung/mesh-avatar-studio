@@ -394,3 +394,11 @@ activity for the affected project. This lets the creator exit its submitted
 state instead of remaining stuck. Transient socket disconnects are not terminal
 and continue using the existing reconnect path. Real-provider initialization
 failure and pending-cancellation UI behavior still require manual verification.
+
+Reconnect retry budgets now reset only after the bridge's authenticated
+`attached` acknowledgement remains connected for 10 seconds, not on WebSocket
+open. Close/unmount clears that timer, so rapid connect/disconnect flapping
+cannot replenish the three-attempt budget. Pending unsent creation tasks also
+use bounded reconnect; consumed prompts are still not resent. Explicit manual
+reconnect starts a new budget. Real-provider network flapping remains a manual
+verification item; build/lint alone do not validate this behavior.

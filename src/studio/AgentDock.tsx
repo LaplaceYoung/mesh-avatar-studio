@@ -97,6 +97,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   }, [foreignLock?.expiresAt]);
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
   const start = async () => {
+    reconnects.current = 0;
     setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);
     try {
       const response = await fetch('/__studio/agents', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Request': '1' }, body: JSON.stringify({ provider }) });
@@ -136,7 +137,14 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   useEffect(() => { if (pinned.current && feed.current) feed.current.scrollTop = feed.current.scrollHeight; }, [entries, permissions]);
   useEffect(() => {
     if (!session) return;
+    let stableConnectionTimer: ReturnType<typeof setTimeout> | undefined;
     const apply = (event: Event, replaying = false) => {
+      if (event.type === 'attached' && !replaying) {
+        // Briefly opening a socket is not recovery. Reset the retry budget
+        // only after the authenticated attachment remains stable.
+        clearTimeout(stableConnectionTimer);
+        stableConnectionTimer = setTimeout(() => { reconnects.current = 0; }, 10_000);
+      }
       if (event.type === 'replay') {
         setEntries([]); setPermissions([]); streamId.current = null;
         const events = event.events ?? [];
@@ -202,21 +210,22 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (update.sessionUpdate === 'plan' && update.entries) setEntries(items => [...items.filter(item => item.id !== 'plan'), { id: 'plan', kind: 'plan', text: update.entries!.map(entry => `${entry.status} · ${entry.content}`).join('\n') }]);
     };
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/__studio/agent-session`); socket.current = ws;
-    ws.onopen = () => { reconnects.current = 0; ws.send(JSON.stringify({ type: 'attach', ...session })); };
+    ws.onopen = () => { ws.send(JSON.stringify({ type: 'attach', ...session })); };
     ws.onmessage = event => { try { apply(JSON.parse(event.data)); } catch { setError('Invalid ACP event'); } };
     ws.onerror = () => setError(zh ? '连接失败；如果会话已过期，请重新连接 Agent。' : 'Connection failed; reconnect if the ACP session expired.');
     ws.onclose = event => {
+      clearTimeout(stableConnectionTimer);
       if (event.code === 1008) { savePreference(SESSION_KEY, ''); failProduction(zh ? 'ACP 会话已过期，请检查产物后重新连接。' : 'ACP session expired. Inspect artifacts before reconnecting.'); setSession(undefined); setStatus('idle'); setError(zh ? 'ACP 会话已过期，请重新连接。' : 'ACP session expired; reconnect to start a new session.'); return; }
       setStatus(current => current === 'exited' ? current : 'disconnected');
-      if (productionTurn.current) {
-        emitActivity('working', zh ? 'ACP 连接暂时断开，正在尝试恢复原制作任务。' : 'ACP connection lost; attempting to resume the existing production turn.');
+      if (productionTurn.current || pendingRef.current) {
+        emitActivity(productionTurn.current ? 'working' : 'starting', zh ? 'ACP 连接暂时断开，正在尝试恢复原制作任务。' : 'ACP connection lost; attempting to resume the existing production turn.');
         if (reconnects.current < 3 && session) {
           const delay = 1000 * (reconnects.current + 1); reconnects.current += 1; setStatus('starting');
           reconnectTimer.current = setTimeout(() => setAttempt(value => value + 1), delay);
         } else setError(zh ? '自动重连已达上限，请手动重连；不会重复提交制作任务。' : 'Automatic reconnect limit reached. Reconnect manually; the production prompt will not be duplicated.');
       }
     };
-    return () => { ws.onclose = null; ws.close(); socket.current = null; if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; } };
+    return () => { clearTimeout(stableConnectionTimer); ws.onclose = null; ws.close(); socket.current = null; if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; } };
   }, [session, attempt]);
   const send = (message: object) => { if (socket.current?.readyState === WebSocket.OPEN) { socket.current.send(JSON.stringify(message)); return true; } setError(zh ? '会话连接已断开，请重连。' : 'Session disconnected. Reconnect first.'); return false; };
   const active = status === 'ready' || status === 'working';
@@ -225,7 +234,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     <div className="agent-toolbar"><Space><Tag color={active ? 'green' : 'default'}>{zh ? statusLabel[status] ?? status : status}</Tag><span className="muted">ACP</span></Space>
       <Space wrap><Select aria-label="Agent" value={provider} disabled={!!session && status !== 'exited'} onChange={setProvider} style={{ width: 142 }} options={(providers.length ? providers : (Object.keys(labels) as Provider[]).map(id => ({ id, available: true }))).map(p => ({ value: p.id, label: `${labels[p.id]}${p.available ? '' : zh ? ' · 未安装' : ' · missing'}`, disabled: !p.available }))} />
         {(!session || status === 'exited') && <Button type="primary" loading={status === 'starting'} onClick={() => { void start(); }}>{zh ? '连接' : 'Connect'}</Button>}
-        {status === 'disconnected' && <Button onClick={() => { setError(''); setAttempt(value => value + 1); }}>{zh ? '重连' : 'Reconnect'}</Button>}
+        {status === 'disconnected' && <Button onClick={() => { reconnects.current = 0; setError(''); setStatus('starting'); setAttempt(value => value + 1); }}>{zh ? '重连' : 'Reconnect'}</Button>}
         {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { savePreference(SESSION_KEY, ''); failProduction(zh ? '已结束 ACP 会话；请检查产物后继续。' : 'ACP session ended; inspect artifacts before resuming.'); setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
         <Button icon={<ReloadOutlined />} onClick={onRefresh} aria-label={zh ? '刷新项目' : 'Refresh project'} />
       </Space></div>

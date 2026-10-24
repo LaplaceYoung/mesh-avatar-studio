@@ -341,3 +341,12 @@ id and project name. On reload it restores the busy guard and reattaches the
 existing session without replaying the prompt. Completion, provider exit, session
 expiry, and explicit stop clear the marker. A historical activity record alone
 never disables ordinary recovery or creates a live execution claim.
+
+## ACP cancellation and continuation
+
+Only `stopReason: end_turn` qualifies a production turn for automatic
+continuation. Cancellation, limits, refusal and unknown stop reasons stop the
+continuation chain and surface the reason. Artifacts are still refreshed so
+partial work remains inspectable. A normal turn ending does not establish
+visual approval or a completed avatar. Verify cancellation against a real ACP
+provider before claiming the complete workflow is validated.

@@ -145,7 +145,16 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
         // ACP completion means the turn ended, not that visual approval exists.
         // Only inspect artifacts here. The socket callback can outlive the editor
         // state it captured; reloading that editor must remain an explicit action.
-        if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.', projectName); window.dispatchEvent(new Event('studio:production-refresh')); }
+        if (productionTurn.current) {
+          const projectName = clearProductionTurn();
+          // Cancellation and limits are terminal for automation, even though
+          // ACP returns them through the same response as a normal end_turn.
+          const completed = event.stopReason === 'end_turn';
+          emitActivity(completed ? 'completed' : 'failed', completed
+            ? zh ? 'Agent 回合结束，正在检查制作产物；不代表角色已完成。' : 'Agent turn ended; inspecting artifacts, not declaring the avatar complete.'
+            : zh ? `Agent 已停止（${event.stopReason ?? '未知原因'}），不会自动续跑；请检查产物后手动继续。` : `Agent stopped (${event.stopReason ?? 'unknown reason'}); automatic continuation is disabled for this turn. Inspect artifacts before resuming.`, projectName);
+          window.dispatchEvent(new Event('studio:production-refresh'));
+        }
       }
       if (event.type === 'permission' && event.id && event.options) setPermissions(items => [...items.filter(p => p.id !== event.id), event as Permission]);
       if (event.type === 'permission_resolved') setPermissions(items => items.filter(p => p.id !== event.id));

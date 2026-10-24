@@ -3,6 +3,7 @@ import { Alert, Button, Drawer, Empty, Image, Input, Select, Space, Tag } from '
 import type { ProductionStage } from '../shared/production';
 import { useI18n } from '../editor/i18n';
 import { readPreference, savePreference } from '../editor/preferences';
+import { reviewNavigation } from './review-navigation';
 
 export function PoseReview({ project, stage, open, onClose }: { project: string; stage?: ProductionStage; open: boolean; onClose(): void }) {
   const { language } = useI18n(), zh = language === 'zh';
@@ -17,12 +18,12 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
   const file = files.includes(selected) ? selected : files.find(file => file.endsWith('contact-sheet.png')) ?? files[0];
   const areas = zh ? { eyes: '眼睛 / 闭眼残留', mouth: '嘴部 / 下巴拉伸', hair: '头发 / 面部遮挡', head: '转头 / 耳朵破损', body: '身体 / 饰品摆动', other: '其他问题' } : { eyes: 'Eyes / blinking', mouth: 'Mouth / chin', hair: 'Hair / face overlap', head: 'Head turn / ears', body: 'Body / accessories', other: 'Other' };
   const contactSheet = files.find(value => value.endsWith('contact-sheet.png'));
-  const eyesCrop = files.find(value => value.endsWith('-eyes.png'));
-  const mouthCrop = files.find(value => value.endsWith('-mouth.png'));
+  const navigation = reviewNavigation(files, file);
   const quickFiles = [
     { key: 'contact', label: zh ? '总览' : 'Contact sheet', file: contactSheet },
-    { key: 'eyes', label: zh ? '眼部' : 'Eyes crop', file: eyesCrop },
-    { key: 'mouth', label: zh ? '嘴部' : 'Mouth crop', file: mouthCrop },
+    { key: 'full', label: zh ? '当前动作全图' : 'Full pose', file: navigation.full },
+    { key: 'eyes', label: zh ? '当前动作眼部' : 'Pose eyes', file: navigation.eyes },
+    { key: 'mouth', label: zh ? '当前动作嘴部' : 'Pose mouth', file: navigation.mouth },
   ].filter(item => item.file);
   const motionFiles = [
     { key: 'eyes-closed', label: zh ? '闭眼' : 'Eyes closed', file: files.find(value => value === 'review/eyes-closed.png') },
@@ -53,6 +54,11 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
         {quickFiles.length > 0 && <div className="review-quick-filters" role="toolbar" aria-label={zh ? '关键审查证据' : 'Key review evidence'}>{quickFiles.map(item => <Button key={item.key} size="small" type={file === item.file ? 'primary' : 'default'} aria-pressed={file === item.file} onClick={() => setSelected(item.file!)}>{item.label}</Button>)}</div>}
         {availableMotion.length > 0 && <div className="review-quick-filters" role="toolbar" aria-label={zh ? '动作审查快捷入口' : 'Motion review shortcuts'}>{availableMotion.map(item => <Button key={item.key} size="small" type={file === item.file ? 'primary' : 'default'} aria-pressed={file === item.file} onClick={() => setSelected(item.file!)}>{item.label}</Button>)}</div>}
         <Select aria-label={zh ? '审查图片' : 'Review image'} value={file} onChange={setSelected} options={files.map(value => ({ value, label: value.slice('review/'.length) }))} />
+        {file !== contactSheet && <Space wrap>
+          <Button disabled={!navigation.previous} onClick={() => setSelected(navigation.previous!)}>{zh ? '上一帧' : 'Previous frame'}</Button>
+          <span role="status">{navigation.index + 1}/{navigation.count} · {navigation.frame?.slice('review/'.length)}</span>
+          <Button disabled={!navigation.next} onClick={() => setSelected(navigation.next!)}>{zh ? '下一帧' : 'Next frame'}</Button>
+        </Space>}
         <div className="review-image-stage"><Image src={`/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file.slice('review/'.length))}&revision=${revision}`} alt={`${project} / ${file}`} /></div>
         <small className="muted">{zh ? '点击图片放大。必须同时检查 contact sheet、眼部裁剪和嘴部裁剪，再检查闭眼残留、转头裂缝、嘴部拉伸、头发遮挡；生成图片不等于通过审查。' : 'Inspect the contact sheet, eye crop and mouth crop as well as blink residue, tears, mouth stretching and hair overlap. Rendering is not approval.'}</small>
       </> : <Empty description={zh ? '尚无审查图片，请让 Agent 先运行 render-poses。' : 'Ask the agent to run render-poses first.'} />}

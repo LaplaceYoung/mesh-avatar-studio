@@ -52,7 +52,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const receive = (event: globalThis.Event) => {
       const value = (event as CustomEvent<{ prompt: string; projectName: string; source: string }>).detail;
       if (!value || typeof value.prompt !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.projectName)) return;
-      if (pendingRef.current) { setError(zh ? '已有待发送制作任务，请先取消或完成连接。' : 'A creation task is already pending. Connect or cancel it first.'); return; }
+      if (pendingRef.current || productionTurn.current || status === 'working' || status === 'starting') { setError(zh ? '已有制作任务正在执行，请等待完成或失败后再提交新的任务。' : 'A production task is already running. Wait for it to complete or fail before submitting another.'); return; }
       pendingRef.current = value; setPendingCreation(value);
       productionProject.current = value.projectName;
       emitActivity('starting', zh ? '已确认制作任务，正在连接 ACP。' : 'Production task confirmed; connecting ACP.');

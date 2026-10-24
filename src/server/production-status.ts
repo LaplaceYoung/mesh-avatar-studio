@@ -203,6 +203,15 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const hairFrames = [...reviewFiles].filter(name => /^hair-sway-[0-9]+\.png$/.test(name));
     if (missingPoses.length) result.issues.push(`Motion review is missing required poses: ${missingPoses.join(', ')}.`);
     if (hairFrames.length < 6) result.issues.push(`Motion review is missing hair-sway frames: expected 6, found ${hairFrames.length}.`);
+    const poseNames = Array.isArray(metadata.poses) ? metadata.poses.map((pose: unknown) => pose && typeof pose === 'object' && typeof (pose as { name?: unknown }).name === 'string' ? (pose as { name: string }).name : '') : [];
+    if (poseNames.length !== requiredPoses.length || requiredPoses.some(name => !poseNames.includes(name))) result.issues.push('Motion review metadata does not describe the complete standard pose set. Re-render poses instead of editing poses.json by hand.');
+    if (metadata.fixedFps !== 60) result.issues.push('Motion review must be rendered at a fixed 60 FPS for comparable frame checks.');
+    if (metadata.hairFrames !== 6) result.issues.push('Motion review metadata must contain 6 hair-sway frames.');
+    const cropBounds = metadata.cropBounds as { eyes?: unknown; mouth?: unknown } | undefined;
+    for (const name of ['eyes', 'mouth'] as const) {
+      const bounds = cropBounds?.[name];
+      if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every((value: unknown) => Number.isFinite(value) && Number(value) >= 0)) result.issues.push(`Motion review ${name} crop bounds are missing or invalid; re-render poses from the current rig.`);
+    }
     if (!reviewFiles.has('contact-sheet.png')) result.issues.push('Review contact-sheet.png is missing; render-poses must produce the full motion sheet.');
     if (![...reviewFiles].some(name => /-eyes\.png$/.test(name))) result.issues.push('Eye crop evidence is missing; inspect a rendered eyes crop before visual signoff.');
     if (![...reviewFiles].some(name => /-mouth\.png$/.test(name))) result.issues.push('Mouth crop evidence is missing; inspect a rendered mouth crop before visual signoff.');

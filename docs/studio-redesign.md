@@ -350,3 +350,13 @@ continuation chain and surface the reason. Artifacts are still refreshed so
 partial work remains inspectable. A normal turn ending does not establish
 visual approval or a completed avatar. Verify cancellation against a real ACP
 provider before claiming the complete workflow is validated.
+
+ACP history replay rebuilds messages, tools and permissions without replaying
+production completion/error side effects. When the replay's latest state is
+working, retain the existing production marker. When it is ready/exited, stop
+automatic continuation and request explicit artifact inspection and manual
+resumption. This intentionally favors avoiding duplicate writes over silently
+restarting a turn that ended during disconnection. Verification still needed
+with a real provider: disconnect during a second production turn after an older
+completed turn, reconnect, and confirm that the older completion does not clear
+the current production marker or submit a new prompt.

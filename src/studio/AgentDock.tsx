@@ -129,23 +129,37 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   useEffect(() => { if (pinned.current && feed.current) feed.current.scrollTop = feed.current.scrollHeight; }, [entries, permissions]);
   useEffect(() => {
     if (!session) return;
-    const apply = (event: Event) => {
-      if (event.type === 'replay') { setEntries([]); setPermissions([]); streamId.current = null; for (const item of event.events ?? []) apply(item); return; }
+    const apply = (event: Event, replaying = false) => {
+      if (event.type === 'replay') {
+        setEntries([]); setPermissions([]); streamId.current = null;
+        const events = event.events ?? [];
+        for (const item of events) apply(item, true);
+        // Historical completions must not end the currently running turn.
+        // A terminal snapshot requires explicit resumption, never prompt replay.
+        const latestState = [...events].reverse().find(item => item.type === 'state');
+        const last = events.at(-1);
+        if (productionTurn.current && (latestState?.state === 'ready' || latestState?.state === 'exited' || last?.type === 'exit')) {
+          const projectName = clearProductionTurn();
+          emitActivity('failed', zh ? '重连后发现原回合已结束；请检查产物后手动继续，不会自动重复提交。' : 'The original turn ended while disconnected. Inspect artifacts and resume manually; no prompt was replayed.', projectName);
+          window.dispatchEvent(new Event('studio:production-refresh'));
+        }
+        return;
+      }
       if (event.type === 'ready') { setStatus('ready'); setConfig(event.session?.configOptions ?? []); }
       if (event.type === 'configuration' && event.configOptions) setConfig(event.configOptions);
       if (event.type === 'state' && event.state) setStatus(event.state);
       if (event.type === 'exit') {
         setStatus('exited');
-        savePreference(SESSION_KEY, '');
-        if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.', projectName); }
+        if (!replaying) savePreference(SESSION_KEY, '');
+        if (!replaying && productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.', projectName); }
       }
-      if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', event.message ?? 'Agent error', projectName); } setStatus(current => current === 'configuring' ? 'ready' : current); }
+      if (event.type === 'error' && !replaying) { setError(event.message ?? 'Agent error'); if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', event.message ?? 'Agent error', projectName); } setStatus(current => current === 'configuring' ? 'ready' : current); }
       if (event.type === 'complete') {
         streamId.current = null; setStatus('ready');
         // ACP completion means the turn ended, not that visual approval exists.
         // Only inspect artifacts here. The socket callback can outlive the editor
         // state it captured; reloading that editor must remain an explicit action.
-        if (productionTurn.current) {
+        if (!replaying && productionTurn.current) {
           const projectName = clearProductionTurn();
           // Cancellation and limits are terminal for automation, even though
           // ACP returns them through the same response as a normal end_turn.

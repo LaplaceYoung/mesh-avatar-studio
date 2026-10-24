@@ -31,11 +31,21 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
   ];
   const availableMotion = motionFiles.filter(item => item.file);
   const missingMotion = motionFiles.filter(item => !item.file);
+  const motionGroups = [
+    { label: zh ? '眼睛' : 'Eyes', files: ['review/eyes-half.png', 'review/eyes-closed.png'] },
+    { label: zh ? '嘴部' : 'Mouth', files: ['review/mouth-open.png'] },
+    { label: zh ? '头部' : 'Head', files: ['review/turn-left.png', 'review/turn-right.png', 'review/look-up.png', 'review/look-down.png'] },
+    { label: zh ? '倾斜' : 'Tilt', files: ['review/tilt-left.png', 'review/tilt-right.png'] },
+    { label: zh ? '身体' : 'Body', files: ['review/body-left.png', 'review/body-right.png'] },
+    { label: zh ? '表情' : 'Expressions', files: ['review/angry.png', 'review/sad.png', 'review/surprise.png'] },
+    { label: zh ? '头发' : 'Hair', files: Array.from({ length: 6 }, (_, index) => `review/hair-sway-${index}.png`) },
+  ].map(group => ({ ...group, present: group.files.filter(value => files.includes(value)).length }));
   return <Drawer title={zh ? '姿态审查' : 'Pose review'} placement="right" size="large" open={open} onClose={onClose} destroyOnHidden>
     <div className="pose-review">
       <Space wrap><strong>{project}</strong><Tag>{zh ? '视觉质量尚未验收' : 'Visual quality not approved'}</Tag><Button onClick={() => setRevision(value => value + 1)}>{zh ? '重载图片' : 'Reload images'}</Button></Space>
       {stage?.state === 'invalid' && <Alert type="warning" title={zh ? '审查产物可能不完整或已过时。' : 'Review artifacts may be incomplete or stale.'} description={stage.issues.join(' · ')} />}
       <div className="review-coverage" aria-label={zh ? '动作证据覆盖' : 'Motion evidence coverage'}><strong>{zh ? '动作证据' : 'Motion evidence'}</strong><span>{zh ? `关键动作 ${availableMotion.length}/${motionFiles.length}` : `Key motions ${availableMotion.length}/${motionFiles.length}`}</span>{missingMotion.length > 0 && <small>{zh ? `缺少：${missingMotion.map(item => item.label).join('、')}` : `Missing: ${missingMotion.map(item => item.label).join(', ')}`}</small>}</div>
+      <div className="review-coverage review-coverage-groups" aria-label={zh ? '动作类别覆盖' : 'Motion category coverage'}>{motionGroups.map(group => <span key={group.label} className={group.present === group.files.length ? 'review-coverage-complete' : 'review-coverage-missing'}>{group.label} {group.present}/{group.files.length}</span>)}</div>
       {files.length && file ? <>
         {quickFiles.length > 0 && <div className="review-quick-filters" role="toolbar" aria-label={zh ? '关键审查证据' : 'Key review evidence'}>{quickFiles.map(item => <Button key={item.key} size="small" type={file === item.file ? 'primary' : 'default'} aria-pressed={file === item.file} onClick={() => setSelected(item.file!)}>{item.label}</Button>)}</div>}
         {availableMotion.length > 0 && <div className="review-quick-filters" role="toolbar" aria-label={zh ? '动作审查快捷入口' : 'Motion review shortcuts'}>{availableMotion.map(item => <Button key={item.key} size="small" type={file === item.file ? 'primary' : 'default'} aria-pressed={file === item.file} onClick={() => setSelected(item.file!)}>{item.label}</Button>)}</div>}

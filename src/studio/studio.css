@@ -127,6 +127,10 @@ small,.muted { color:var(--studio-muted); }
 .review-quick-filters { display:flex; flex-wrap:wrap; gap:6px; margin:10px 0; }
 .review-coverage { display:grid; grid-template-columns:auto 1fr; gap:4px 10px; align-items:baseline; padding:8px 10px; border:1px solid var(--studio-line); background:var(--studio-inset); border-radius:6px; font-size:11px; }
 .review-coverage small { grid-column:1/-1; overflow-wrap:anywhere; }
+.review-coverage-groups { display:flex; flex-wrap:wrap; gap:6px 12px; }
+.review-coverage-groups span { color:var(--studio-muted); }
+.review-coverage-groups .review-coverage-complete { color:#518061; }
+.review-coverage-groups .review-coverage-missing { color:#b27836; }
 .agent-message { margin-bottom:18px; font-size:13px; line-height:1.7; }.agent-message>small { display:block; font-size:10px; margin-bottom:5px; }.agent-message>div { white-space:pre-wrap; overflow-wrap:anywhere; }
 .agent-message-user { padding:10px 12px; margin-left:32px; border-radius:8px; background:var(--studio-inset); border:1px solid var(--studio-line); }.agent-message-plan { border-left:2px solid var(--studio-accent); padding-left:10px; }
 .agent-tool { display:flex; gap:4px; align-items:baseline; font-size:11px; margin:8px 0; color:var(--studio-muted); overflow-wrap:anywhere; }.agent-permission { padding:12px; border-top:1px solid var(--studio-accent); max-height:220px; overflow:auto; }.agent-permission strong { display:block; margin-bottom:8px; }

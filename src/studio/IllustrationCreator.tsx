@@ -3,7 +3,7 @@ import { Alert, Button, Checkbox, Image, Input, Segmented, Space, Steps, Upload 
 import { InboxOutlined } from '@ant-design/icons';
 import { useI18n } from '../editor/i18n';
 
-type Uploaded = { sourceSha256?: string; source: string; projectName: string; width: number; height: number; transparent: boolean; backgroundProcessed?: boolean; warning?: string; preflight?: { method: string; alphaCoverage: number; estimatedContentBox: [number, number, number, number]; edgeTouch: { top: boolean; right: boolean; bottom: boolean; left: boolean }; borderUniformity: number; warnings: string[] } };
+type Uploaded = { sourceSha256?: string; source: string; projectName: string; width: number; height: number; transparent: boolean; backgroundProcessed?: boolean; warning?: string; preflight?: { visiblePixelCount?: number; method: string; alphaCoverage: number; estimatedContentBox: [number, number, number, number]; edgeTouch: { top: boolean; right: boolean; bottom: boolean; left: boolean }; borderUniformity: number; warnings: string[] } };
 export function IllustrationCreator() {
   const { language } = useI18n(), zh = language === 'zh';
   const [upload, setUpload] = useState<Uploaded>();
@@ -60,7 +60,7 @@ export function IllustrationCreator() {
     } catch (reason) { setError(String(reason)); } finally { setBusy(false); }
   };
   const prepare = async () => {
-    if (!upload || !consent || !validName) return;
+    if (!upload || !consent || !validName || upload.preflight?.visiblePixelCount === 0) return;
     setBusy(true); setError('');
     try {
       const response = await fetch(`/__studio/production-status?project=${encodeURIComponent(name)}`);
@@ -107,6 +107,7 @@ export function IllustrationCreator() {
       {upload.backgroundProcessed && <Segmented aria-label={zh ? '背景处理对比' : 'Background processing comparison'} value={previewVariant} onChange={setPreviewVariant} options={[{ value: 'source', label: zh ? '制作底图' : 'Production source' }, { value: 'original', label: zh ? '未处理原图' : 'Original' }]} />}
       <div className="illustration-summary"><div className="illustration-alpha-preview"><Image src={`${preview}?variant=${previewVariant}`} width={180} alt={previewVariant === 'original' ? zh ? '未处理原图' : 'Original illustration' : zh ? '实际制作底图' : 'Production source'} /></div><div><strong>{upload.width} × {upload.height}</strong><p className="muted">{zh ? '图片已保存，仅在本机。' : 'Image saved locally.'}</p></div></div>
       {upload.preflight && <div className="image-preflight"><strong>{zh ? '源图预检' : 'Source preflight'}</strong><span>{zh ? `主体估计框 ${upload.preflight.estimatedContentBox.join(' · ')}` : `Estimated subject box ${upload.preflight.estimatedContentBox.join(' · ')}`}</span><span>{zh ? `边缘背景一致性 ${(upload.preflight.borderUniformity * 100).toFixed(1)}%` : `Border uniformity ${(upload.preflight.borderUniformity * 100).toFixed(1)}%`}</span>{upload.preflight.warnings.map(warning => <small key={warning}>{warning}</small>)}</div>}
+      {upload.preflight?.visiblePixelCount === 0 && <Alert type="error" showIcon title={zh ? '制作底图完全透明，无法制作角色' : 'The production source is fully transparent'} description={zh ? '请查看未处理原图；若去背景误删了主体，请关闭去背景后重新上传。当前图片不会提交给 Agent。' : 'Inspect the original. If background removal erased the subject, disable it and upload again. This image cannot be submitted to the Agent.'} />}
       {!upload.transparent && <Alert type="warning" title={zh ? '原图没有透明像素，背景可能影响分层质量。' : 'Opaque background may reduce layer quality.'} />}
       {upload.height < 800 && <Alert type="warning" title={zh ? '图片低于 800 px 高，眼部轮廓识别可能不够精细。' : 'Below 800 px tall: eye contour detail may be insufficient.'} />}
       <label className="creation-name">{zh ? '项目目录名' : 'Project directory name'}<Input value={name} onChange={event => setName(event.target.value)} status={validName ? undefined : 'error'} /></label>
@@ -114,7 +115,7 @@ export function IllustrationCreator() {
       <Checkbox checked={consent} onChange={event => setConsent(event.target.checked)}>{zh ? '同意所选 Agent 读取图片并交给其已配置的视觉模型处理（可能是云端）；不包含外部生图授权。' : 'Allow the selected agent to process this image with its configured vision model (possibly cloud-hosted). This does not authorize external image generation.'}</Checkbox>
       {(submitted || activity?.state === 'failed') && <Alert type={activity?.state === 'failed' ? 'error' : 'info'} showIcon title={activity?.state === 'failed' ? zh ? `${submittedProject} 制作失败，可重试` : `${submittedProject} creation failed; retry available` : activity?.state === 'completed' ? zh ? `${submittedProject} 的 Agent 回合已结束` : `${submittedProject}: Agent turn ended` : activity?.state === 'working' ? zh ? `${submittedProject} 正在制作` : `${submittedProject} is being created` : zh ? `已提交 ${submittedProject}，等待 ACP 执行` : `Submitted ${submittedProject}; waiting for ACP`} description={activity?.message ?? (zh ? '制作任务已进入 Agent 队列。请在悬浮 Agent 窗口查看工具调用和阶段进度，不要重复提交。失败后此按钮会恢复。' : 'The task is queued for the Agent. Follow tool calls and stage progress in the floating Agent window; do not submit again. The button returns after a failure.')} action={activity?.state === 'completed' ? <Button size="small" loading={checkingArtifacts} disabled={!previewAvailable || checkingArtifacts} onClick={() => window.dispatchEvent(new CustomEvent('studio:open-generated-project', { detail: submittedProject }))}>{zh ? '打开可用预览' : 'Open available preview'}</Button> : undefined} />}
       {activity?.state === 'completed' && <small className="muted">{checkingArtifacts ? zh ? '正在检查磁盘产物…' : 'Inspecting artifacts…' : previewAvailable ? zh ? '预览文件已就绪，不代表完整制作或视觉验收通过。' : 'Preview files are ready; this does not establish pipeline completion or visual approval.' : zh ? '尚无可打开的预览，请在 Agent 窗口查看缺失阶段并继续。' : 'No preview is available yet. Inspect missing stages in the Agent window and continue.'}</small>}
-      <Button type="primary" loading={busy} disabled={!consent || !validName || busy || submitted} onClick={() => { void prepare(); }}>{submitted ? zh ? '已提交，等待执行' : 'Submitted; waiting' : activity?.state === 'failed' && submittedProject === name ? zh ? '恢复本次制作' : 'Recover this production' : zh ? '开始 AI 制作' : 'Start AI creation'}</Button>
+      <Button type="primary" loading={busy} disabled={!consent || !validName || busy || submitted || upload.preflight?.visiblePixelCount === 0} onClick={() => { void prepare(); }}>{submitted ? zh ? '已提交，等待执行' : 'Submitted; waiting' : activity?.state === 'failed' && submittedProject === name ? zh ? '恢复本次制作' : 'Recover this production' : zh ? '开始 AI 制作' : 'Start AI creation'}</Button>
     </>}
     <Steps size="small" orientation="vertical" current={-1} items={(zh ? ['区域识别与坐标校准', '绑定、蒙版与图层构建', '动作审查与缺陷修正', '打开编辑器 / 直播'] : ['Inspect and calibrate', 'Rig and build layers', 'Review and correct motion', 'Open in editor / Live']).map(title => ({ title }))} />
     <Space><small className="muted">{zh ? '流程说明，不代表制作已完成；真实进度以 Agent 工具结果为准。' : 'Workflow outline only. Completion requires actual agent/tool results.'}</small></Space>

@@ -72,7 +72,13 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (event.type === 'state' && event.state) setStatus(event.state);
       if (event.type === 'exit') setStatus('exited');
       if (event.type === 'error') { setError(event.message ?? 'Agent error'); setStatus(current => current === 'configuring' ? 'ready' : current); }
-      if (event.type === 'complete') { streamId.current = null; setStatus('ready'); }
+      if (event.type === 'complete') {
+        streamId.current = null; setStatus('ready');
+        // ACP completion means the turn ended, not that visual approval exists.
+        // Refresh through the existing dirty-state guard so disk changes become
+        // visible without replacing unsaved editor work silently.
+        window.setTimeout(onRefresh, 400);
+      }
       if (event.type === 'permission' && event.id && event.options) setPermissions(items => [...items.filter(p => p.id !== event.id), event as Permission]);
       if (event.type === 'permission_resolved') setPermissions(items => items.filter(p => p.id !== event.id));
       if (event.type === 'user') { streamId.current = null; setEntries(items => [...items, { id: `user-${++sequence.current}`, kind: 'user', text: event.text ?? '' }]); }

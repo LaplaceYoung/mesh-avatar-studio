@@ -2,24 +2,57 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { Button, Space } from 'antd';
 import { CodeOutlined, MinusOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
 import { useI18n } from '../editor/i18n';
+import { readPreference, savePreference } from '../editor/preferences';
+
+type WindowSettings = { expanded?: boolean; position?: { x: number; y: number }; size?: { width: number; height: number } };
+const SETTINGS_KEY = 'studio-agent-window';
+function readSettings(): WindowSettings {
+  try {
+    const value = JSON.parse(readPreference(SETTINGS_KEY) ?? 'null');
+    if (!value || typeof value !== 'object') return {};
+    const position = value.position && Number.isFinite(value.position.x) && Number.isFinite(value.position.y) ? { x: value.position.x, y: value.position.y } : undefined;
+    const size = value.size && Number.isFinite(value.size.width) && Number.isFinite(value.size.height) ? { width: value.size.width, height: value.size.height } : undefined;
+    return { expanded: value.expanded === true, position, size };
+  } catch { return {}; }
+}
 
 export function AgentWindow({ open, onOpenChange, children }: { open: boolean; onOpenChange(open: boolean): void; children: ReactNode }) {
   const { language } = useI18n();
   const zh = language === 'zh';
-  const [expanded, setExpanded] = useState(false);
-  const [position, setPosition] = useState<{ x: number; y: number }>();
+  const [settings] = useState(readSettings);
+  const [expanded, setExpanded] = useState(settings.expanded ?? false);
+  const [position, setPosition] = useState<{ x: number; y: number } | undefined>(settings.position);
+  const [size, setSize] = useState<{ width: number; height: number } | undefined>(settings.size);
   const windowRef = useRef<HTMLElement>(null);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   useEffect(() => {
-    const reset = () => setPosition(undefined);
-    window.addEventListener('resize', reset);
-    return () => window.removeEventListener('resize', reset);
-  }, []);
+    savePreference(SETTINGS_KEY, JSON.stringify({ expanded, position, size } satisfies WindowSettings));
+  }, [expanded, position, size]);
+  useEffect(() => {
+    const element = windowRef.current;
+    if (!element || expanded) return;
+    const observer = new ResizeObserver(() => {
+      const rect = element.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) setSize({ width: Math.round(rect.width), height: Math.round(rect.height) });
+    });
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [expanded, open]);
+  useEffect(() => {
+    const keepInViewport = () => {
+      if (!position || expanded) return;
+      const width = size?.width ?? 620, height = size?.height ?? 650;
+      setPosition({ x: Math.max(8, Math.min(innerWidth - width - 8, position.x)), y: Math.max(8, Math.min(innerHeight - height - 8, position.y)) });
+    };
+    window.addEventListener('resize', keepInViewport);
+    return () => window.removeEventListener('resize', keepInViewport);
+  }, [expanded, position, size]);
+  const style = !expanded ? { ...(position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : {}), ...(size ? { width: size.width, height: size.height } : {}) } : undefined;
   return <>
     {!open && <Button className="agent-launcher" type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-label={zh ? '展开 Agent 对话' : 'Open agent conversation'}>Agent</Button>}
     <section ref={windowRef} className={`agent-window${expanded ? ' agent-window-expanded' : ''}`} hidden={!open}
       aria-label={zh ? 'Agent 对话窗口' : 'Agent conversation window'}
-      style={!expanded && position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : undefined}>
+      style={style}>
       <header className="agent-window-titlebar"
         onPointerDown={event => {
           if (expanded || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;

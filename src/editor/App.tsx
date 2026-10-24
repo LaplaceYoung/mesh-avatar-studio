@@ -16,7 +16,6 @@ import { PartList } from './PartList';
 import { GUIDE_KEY, I18nProvider, readPreference, savePreference, useI18n, type PartGroup } from './i18n';
 import { FirstGuide, GuideSteps, Help } from './Guide';
 import { RecentProjects } from './RecentProjects';
-import { AskAgent } from './AskAgent';
 import { MenuScope } from './Menu';
 import { VariantsPanel } from './VariantsPanel';
 import { JobFeedback } from './JobFeedback';
@@ -27,6 +26,8 @@ import { App as AntApp, Button, Drawer, Empty, Segmented, Space, Splitter, Tabs,
 import { AppstoreOutlined, CodeOutlined, FolderOpenOutlined, SaveOutlined, UndoOutlined, RedoOutlined, QuestionCircleOutlined, VideoCameraOutlined } from '@ant-design/icons';
 import { StudioTheme, ThemeToggle } from '../studio/Theme';
 import { AgentDock } from '../studio/AgentDock';
+import { IllustrationCreator } from '../studio/IllustrationCreator';
+import { AgentWindow } from '../studio/AgentWindow';
 import { liveText } from '../live/i18n';
 
 type EditorError = { kind: 'invalidRig' | 'invalidFolder' | 'missingFolderFiles' | 'unreadableFolder' | 'unreadableProject' | 'invalidValue' | 'saveError' | 'revealError' | 'copyError' | 'continueError'; paths: string[] };
@@ -36,16 +37,17 @@ export function App() { return <I18nProvider><StudioTheme><MenuScope><Workspace 
 function Workspace() {
   const { t, parts, language, locale, setLanguage, title } = useI18n();
   const [projectLibrary, setProjectLibrary] = useState(false);
-  const [agentOpen, setAgentOpen] = useState(true);
+  const [agentOpen, setAgentOpen] = useState(false);
   const [inspectorTab, setInspectorTab] = useState('preview');
   const { modal } = AntApp.useApp();
   const zh = language === 'zh';
   const openMenu = useRef<{ open: boolean } | null>(null);
   openMenu.current = { get open() { return projectLibrary; }, set open(value: boolean) { setProjectLibrary(value); } };
   useEffect(() => {
-    const show = () => setAgentOpen(true);
+    const show = () => { setProjectLibrary(false); setAgentOpen(true); };
     window.addEventListener('studio:agent-prompt', show);
-    return () => window.removeEventListener('studio:agent-prompt', show);
+    window.addEventListener('studio:agent-start', show);
+    return () => { window.removeEventListener('studio:agent-prompt', show); window.removeEventListener('studio:agent-start', show); };
   }, []);
 
   const [guide, setGuide] = useState(() => readPreference(GUIDE_KEY) !== '1');
@@ -403,6 +405,23 @@ function Workspace() {
     } catch (error) { setArchiveFeedback({ error: error instanceof Error ? error.message : sharing.failed }); throw error; }
     finally { jobRef.current = null; setArchiveBusy(false); }
   };
+  const generatedProjectHandler = useRef<(name: string) => void>(() => undefined);
+  generatedProjectHandler.current = name => {
+    if (busy || saving) return;
+    void localProjects().then(list => {
+      setProjects(list);
+      const entry = list?.find(item => item.name === name && !item.error);
+      if (!entry) { setProjectLibrary(true); return; }
+      const load = () => openLocal(entry);
+      if (dirty) modal.confirm({ title: zh ? '打开生成的角色？' : 'Open generated avatar?', content: zh ? '当前未保存的编辑会被替换，请先保存需要保留的内容。' : 'Unsaved changes will be replaced. Save changes you want to keep.', onOk: load });
+      else void load();
+    }).catch(() => setError({ kind: 'invalidFolder', paths: [] }));
+  };
+  useEffect(() => {
+    const receive = (event: Event) => { const name = (event as CustomEvent<string>).detail; if (typeof name === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(name)) generatedProjectHandler.current(name); };
+    window.addEventListener('studio:open-generated-project', receive);
+    return () => window.removeEventListener('studio:open-generated-project', receive);
+  }, []);
   const importControl = <ImportAvatar busy={busy || saving} available={!!rootPath} onImport={file => { void importFile(file); }} />;
   const projectName = localProject?.readOnly ? t.sampleProject : localProject?.name || pickedName || t.sampleProject;
   const projectPath = localProject?.relativePath ?? (pickedName || 'samples/miko-qipao');
@@ -442,7 +461,7 @@ function Workspace() {
         { key: 'local', label: t.localProjects, children: <div className="library-list">{projects?.map(project => <Button block key={project.name} disabled={opening || !!project.error} data-testid={`project-${project.name}`} onClick={() => openEntry(project)}><div><strong>{project.readOnly ? t.sampleProject : project.name}</strong><small>{project.relativePath}</small><small>{project.error ? `${t.unreadableProject}: ${project.error.code}` : `${t.updated}: ${new Date(project.updatedAt).toLocaleString(locale)}`}</small></div><Tag>{project.readOnly ? t.readOnly : !project.error && project.hasSource === false ? sharing.playbackBadge : zh ? '可编辑' : 'Editable'}</Tag></Button>)}{projects?.length === 0 && <Empty description={t.noProjects} />}</div> },
         { key: 'recent', label: t.recent, children: recentControl },
         { key: 'import', label: sharing.importTitle, children: importControl },
-        { key: 'create', label: t.newIllustration, children: <AskAgent newProject rootPath={rootPath} /> },
+        { key: 'create', label: t.newIllustration, children: <IllustrationCreator /> },
       ]} />
     </Drawer>
     <div className="studio-notices">
@@ -460,8 +479,7 @@ function Workspace() {
 
     </div>
     <div className="studio-body">
-    <Splitter orientation="vertical" className="studio-vertical" onDraggerDoubleClick={() => setAgentOpen(value => !value)}>
-      <Splitter.Panel min={250}>
+
       {(sourceUrl || assets) ? <Splitter className="workspace" style={{ height: '100%' }}>
         <Splitter.Panel defaultSize={260} min={180} max={360} collapsible size={playbackOnly ? 0 : undefined}>
           <div className="parts-container" inert={busy}><PartList rig={rig} visible={visible} selected={selected} onSelect={selectPart} onFocus={group => { selectPart(group); setFocusRequest(current => ({ group, id: (current?.id ?? 0) + 1 })); }} onVisible={setVisible} /></div>
@@ -486,12 +504,10 @@ function Workspace() {
           ]} /></div>
         </Splitter.Panel>
       </Splitter> : <div className="empty-project"><h2>{checking ? t.checking : t.emptyTitle}</h2><p>{t.projectHelp}</p><Button type="primary" onClick={() => setProjectLibrary(true)}>{t.openProject}</Button>{errorNotice}</div>}
-      </Splitter.Panel>
-      <Splitter.Panel defaultSize={380} size={agentOpen ? undefined : 0} min={220} max="70%" resizable={agentOpen}>
-        <AgentDock project={projectPath} selection={selected} onRefresh={refreshAfterAgent} />
-      </Splitter.Panel>
-    </Splitter>
     </div>
+    <AgentWindow open={agentOpen} onOpenChange={setAgentOpen}>
+      <AgentDock project={projectPath} selection={selected} onRefresh={refreshAfterAgent} />
+    </AgentWindow>
     <footer className="studio-status"><Space><span className="status-dot" />{zh ? '本地工作区' : 'Local workspace'}<span data-testid="project-location">{projectPath}</span>{localProject && <><CopyButton value={localProject.absolutePath} label={t.copyPath} icon /><Button size="small" type="text" onClick={() => { void reveal(); }}>{t.showFolder}</Button></>}</Space><span>{selectedPart?.[0] ?? t.selectPart} · WebGL</span></footer>
   </main>;
 }

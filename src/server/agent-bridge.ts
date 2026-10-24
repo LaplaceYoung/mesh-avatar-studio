@@ -5,7 +5,7 @@ import { delimiter, join } from 'node:path';
 import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Plugin } from 'vite';
-import type { IPty } from 'node-pty';
+import { AcpSession, adapterPath, type AgentEvent } from './acp-session';
 
 export const AGENTS = ['claude', 'codex', 'pi'] as const;
 export type AgentProvider = typeof AGENTS[number];
@@ -32,19 +32,19 @@ async function executable(provider: AgentProvider) {
   }
   return null;
 }
-type Session = { id: string; provider: AgentProvider; token: string; pty: IPty; output: string; clients: Set<WebSocket>; exit?: number; timer?: ReturnType<typeof setTimeout> };
+type Session = { id: string; provider: AgentProvider; token: string; agent: AcpSession; events: AgentEvent[]; bytes: number; clients: Set<WebSocket>; exit?: number; timer?: ReturnType<typeof setTimeout> };
 export function agentBridge(root: string): Plugin {
   const sessions = new Map<string, Session>();
   let starting = 0;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
-  const emit = (session: Session, message: object) => { for (const client of session.clients) if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(message)); };
-  const destroy = (session: Session) => { if (!sessions.has(session.id)) return; clearTimeout(session.timer); sessions.delete(session.id); session.pty.kill(); for (const client of session.clients) client.close(); };
+  const emit = (session: Session, message: AgentEvent) => { session.events.push(message); session.bytes += JSON.stringify(message).length; while (session.bytes > 2 * 1024 * 1024 && session.events.length > 1) session.bytes -= JSON.stringify(session.events.shift()).length; for (const client of session.clients) if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(message)); };
+  const destroy = (session: Session) => { if (!sessions.has(session.id)) return; clearTimeout(session.timer); sessions.delete(session.id); session.agent.close(); for (const client of session.clients) client.close(); };
   return { name: 'studio-native-agents', apply: 'serve', configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
       if (req.url?.split('?')[0] !== '/__studio/agents') return next();
       const json = (status: number, data: object) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
       if (!localRequest(req, req.method !== 'GET')) return json(403, { error: 'Local same-origin requests only.' });
-      if (req.method === 'GET') return json(200, { providers: await Promise.all(AGENTS.map(async id => ({ id, available: !!await executable(id) }))) });
+      if (req.method === 'GET') return json(200, { providers: await Promise.all(AGENTS.map(async id => ({ id, available: !!await executable(id) && !!adapterPath(id) }))) });
       if (req.method !== 'POST') return json(405, { error: 'Method not allowed.' });
       let reserved = false;
       try {
@@ -57,20 +57,18 @@ export function agentBridge(root: string): Plugin {
         starting++; reserved = true;
         const command = await executable(provider);
         if (!command) return json(404, { error: `${provider} is not installed on PATH.` });
-        const { spawn } = await import('node-pty');
-        // Spawn the native interactive agent, never a shell or a permission-bypass mode.
-        const pty = spawn(command, [], { cwd: root, name: 'xterm-256color', cols: 100, rows: 20, env: { ...process.env, TERM: 'xterm-256color', COLORTERM: 'truecolor' } });
-        const session: Session = { id: randomBytes(16).toString('hex'), token: randomBytes(32).toString('hex'), provider, pty, output: '', clients: new Set() };
+        const agent = new AcpSession(provider, root, event => { if (session) { if (event.type === 'exit') session.exit = Number(event.code ?? 1); emit(session, event); } });
+        const session: Session = { id: randomBytes(16).toString('hex'), token: randomBytes(32).toString('hex'), provider, agent, events: [], bytes: 0, clients: new Set() };
         sessions.set(session.id, session);
         session.timer = setTimeout(() => destroy(session), 300_000);
-        pty.onData(data => { session.output = (session.output + data).slice(-512 * 1024); emit(session, { type: 'output', data }); });
-        pty.onExit(({ exitCode }) => { session.exit = exitCode; emit(session, { type: 'exit', code: exitCode }); });
+        // Initialize after returning the capability, so startup errors remain visible in the UI.
+        void agent.initialize().catch(error => { session.exit = 1; emit(session, { type: 'error', message: String(error) }); agent.close(); });
         json(201, { id: session.id, token: session.token, provider });
       } catch (error) { json(500, { error: error instanceof Error ? error.message : 'Could not start agent.' }); }
       finally { if (reserved) starting--; }
     });
     server.httpServer?.on('upgrade', (req, socket, head) => {
-      if (req.url !== '/__studio/agent-terminal') return;
+      if (req.url !== '/__studio/agent-session') return;
       if (!localRequest(req) || !req.headers.origin) { socket.destroy(); return; }
       wss.handleUpgrade(req, socket, head, client => {
         let session: Session | undefined;
@@ -82,13 +80,21 @@ export function agentBridge(root: string): Plugin {
               const candidate = sessions.get(message.id);
               if (message.type !== 'attach' || !candidate || !matchesToken(candidate.token, message.token)) { client.close(1008, 'Invalid session'); return; }
               session = candidate; clearTimeout(authTimer); clearTimeout(session.timer); session.clients.add(client);
-              client.send(JSON.stringify({ type: 'output', data: session.output }));
+              client.send(JSON.stringify({ type: 'replay', events: session.events }));
               client.send(JSON.stringify({ type: 'attached', provider: session.provider }));
               if (session.exit !== undefined) client.send(JSON.stringify({ type: 'exit', code: session.exit }));
               return;
             }
-            if (message.type === 'input' && typeof message.data === 'string' && message.data.length <= 64 * 1024 && session.exit === undefined) session.pty.write(message.data);
-            if (message.type === 'resize' && Number.isInteger(message.cols) && Number.isInteger(message.rows)) session.pty.resize(Math.max(20, Math.min(300, message.cols)), Math.max(5, Math.min(120, message.rows)));
+            if (message.type === 'prompt' && typeof message.text === 'string' && message.text.trim() && message.text.length <= 64 * 1024 && session.exit === undefined) {
+              const current = session;
+              void current.agent.prompt(message.text).catch(error => emit(current, { type: 'error', message: String(error) }));
+            }
+            if (message.type === 'configure' && typeof message.configId === 'string' && (typeof message.value === 'string' || typeof message.value === 'boolean')) {
+              const current = session;
+              void current.agent.configure(message.configId, message.value).catch(error => emit(current, { type: 'error', message: String(error) }));
+            }
+            if (message.type === 'cancel') void session.agent.cancel().catch(error => emit(session!, { type: 'error', message: String(error) }));
+            if (message.type === 'permission' && typeof message.id === 'string' && (message.optionId === null || typeof message.optionId === 'string')) session.agent.answer(message.id, message.optionId);
             if (message.type === 'stop') destroy(session);
           } catch { client.close(1008, 'Invalid message'); }
         });

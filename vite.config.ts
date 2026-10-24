@@ -1,5 +1,10 @@
 import { defineConfig } from 'vitest/config';
+import { loadEnv } from 'vite';
+Object.assign(process.env, loadEnv('development', process.cwd(), ''));
 import react from '@vitejs/plugin-react';
+import { mosiImagePlugin } from './src/server/mosi-image';
+import { productionStatusPlugin } from './src/server/production-status';
+import { illustrationUpload } from './src/server/illustration-upload';
 import { agentBridge } from './src/server/agent-bridge';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
@@ -12,7 +17,7 @@ export default defineConfig({
     'mesh-avatar-element': fileURLToPath(new URL('./packages/element/src/index.ts', import.meta.url)),
   } },
   server: { host: '127.0.0.1' },
-  plugins: [react(), agentBridge(fileURLToPath(new URL('.', import.meta.url))), localProjectsPlugin(fileURLToPath(new URL('.', import.meta.url))), mediapipeAssets(fileURLToPath(new URL('.', import.meta.url))), liveRelay(fileURLToPath(new URL('.', import.meta.url))), {
+  plugins: [react(), mosiImagePlugin(fileURLToPath(new URL('.', import.meta.url))), productionStatusPlugin(fileURLToPath(new URL('.', import.meta.url))), illustrationUpload(fileURLToPath(new URL('.', import.meta.url))), agentBridge(fileURLToPath(new URL('.', import.meta.url))), localProjectsPlugin(fileURLToPath(new URL('.', import.meta.url))), mediapipeAssets(fileURLToPath(new URL('.', import.meta.url))), liveRelay(fileURLToPath(new URL('.', import.meta.url))), {
     name: 'sample-rig',
     resolveId(id) {
       if (id === 'virtual:sample-rig') return '\0sample-rig';

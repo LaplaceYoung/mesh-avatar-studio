@@ -1,0 +1,133 @@
+import { open, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { join, sep } from 'node:path';
+import type { Plugin } from 'vite';
+import { validateRig } from '../../packages/runtime/src/index';
+import { localRequest } from './agent-bridge';
+import type { ProductionStage, ProductionStatus } from '../shared/production';
+
+const safeName = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
+const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+export async function inspectProduction(root: string, name: string): Promise<ProductionStatus> {
+  if (!safeName.test(name)) throw new Error('Invalid project name.');
+  const repository = await realpath(root), project = join(repository, 'projects', name);
+  const stages: ProductionStage[] = [];
+  let projectExists = false;
+  try { projectExists = (await stat(project)).isDirectory(); } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
+  async function checkedFile(relative: string, limit: number) {
+    const file = join(project, relative), actual = await realpath(file);
+    if (!actual.startsWith(project + sep)) throw new Error('File path escapes this project.');
+    const info = await stat(actual);
+    if (!info.isFile() || info.size > limit) throw new Error('Not a regular file or exceeds size limit.');
+    return { actual, modified: info.mtimeMs };
+  }
+  async function stage(id: ProductionStage['id'], action: (stage: ProductionStage) => Promise<void>) {
+    const result: ProductionStage = { id, state: 'missing', files: [], issues: [] };
+    try { await action(result); result.state = result.issues.length ? 'invalid' : 'observed'; }
+    catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') { if (result.files.length) { result.state = 'invalid'; result.issues.push('Some required files are missing.'); } }
+      else { result.state = 'invalid'; result.issues.push(error instanceof Error ? error.message : 'Could not inspect artifact.'); }
+    }
+    stages.push(result);
+  }
+  async function json(file: string, result: ProductionStage) {
+    const { actual } = await checkedFile(file, 2 * 1024 * 1024);
+    const value = JSON.parse(await readFile(actual, 'utf8'));
+    result.files.push(file); return value;
+  }
+  async function png(file: string, result: ProductionStage) {
+    const { actual, modified } = await checkedFile(file, 64 * 1024 * 1024);
+    const handle = await open(actual, 'r');
+    try {
+      const header = Buffer.alloc(24); const { bytesRead } = await handle.read(header, 0, header.length, 0);
+      if (bytesRead < 24 || !header.subarray(0, 8).equals(signature) || header.toString('ascii', 12, 16) !== 'IHDR') throw new Error(`${file}: invalid PNG header.`);
+      result.files.push(file); return { width: header.readUInt32BE(16), height: header.readUInt32BE(20), modified };
+    } finally { await handle.close(); }
+  }
+  let source: { width: number; height: number; modified: number } | undefined;
+  let rigModified = 0, layersModified = 0, reviewModified = 0, signoffAt: string | undefined;
+  await stage('source', async result => { source = await png('source.png', result); });
+  await stage('regions', async result => {
+    const regions: unknown = await json('regions.json', result);
+    if (!Array.isArray(regions) || !regions.length || regions.length > 32) throw new Error('Expected 1–32 observed regions.');
+    for (const region of regions) {
+      if (!region || typeof region !== 'object' || !Array.isArray(region.box) || region.box.length !== 4 || !region.box.every(Number.isInteger) || typeof region.observation !== 'string' || !region.observation.trim()) throw new Error('Region needs source coordinates and a visual observation.');
+      const [x0, y0, x1, y1] = region.box;
+      if (!source || !(0 <= x0 && x0 < x1 && x1 <= source.width && 0 <= y0 && y0 < y1 && y1 <= source.height)) throw new Error('Region lies outside the current source image.');
+    }
+  });
+  for (const id of ['draft', 'rig'] as const) await stage(id, async result => {
+    const file = id === 'draft' ? 'rig.draft.json' : 'rig.json';
+    const rig = await json(file, result);
+    result.issues.push(...validateRig(rig, { draft: id === 'draft' }).slice(0, 8));
+    if (source && (rig?.image?.width !== source.width || rig?.image?.height !== source.height)) result.issues.push('Rig and source dimensions differ.');
+    if (id === 'rig') rigModified = (await checkedFile(file, 2 * 1024 * 1024)).modified;
+  });
+  await stage('layers', async result => {
+    const metadata = await json('built/layers.json', result);
+    if (!metadata || !metadata.layers || typeof metadata.layers !== 'object' || Array.isArray(metadata.layers)) throw new Error('Invalid layer metadata.');
+    const names = Object.keys(metadata.layers);
+    if (!names.length || names.length > 128 || names.some(key => !/^[A-Za-z0-9_-]+$/.test(key))) throw new Error('Invalid layer filenames.');
+    if (source && (metadata.size?.[0] !== source.width || metadata.size?.[1] !== source.height)) result.issues.push('Layer dimensions differ from the source image.');
+    await png('built/base.png', result); await png('built/hairmask.png', result);
+    for (const key of names) await png(`built/${key}.png`, result);
+    layersModified = (await checkedFile('built/layers.json', 2 * 1024 * 1024)).modified;
+    if (source && source.modified > layersModified) result.issues.push('Source is newer than built layers; rebuild required.');
+  });
+  await stage('review', async result => {
+    const metadata = await json('review/poses.json', result);
+    if (!Array.isArray(metadata.files) || !metadata.files.length || metadata.files.length > 256 || metadata.files.some((name: unknown) => typeof name !== 'string' || !/^[A-Za-z0-9_-]+\.png$/.test(name))) throw new Error('Invalid review image list.');
+    for (const file of metadata.files) await png(`review/${file}`, result);
+    reviewModified = (await checkedFile('review/poses.json', 2 * 1024 * 1024)).modified;
+    if (Math.max(rigModified, layersModified, source?.modified ?? 0) > reviewModified) result.issues.push('Review images are older than current inputs; render them again.');
+  });
+  try {
+    const signoff = JSON.parse(await readFile(join(project, 'review', 'visual-signoff.json'), 'utf8')) as { reviewModified?: number; approvedAt?: string };
+    if (signoff.reviewModified === reviewModified && typeof signoff.approvedAt === 'string' && !stages.find(stage => stage.state === 'invalid')) signoffAt = signoff.approvedAt;
+  } catch { /* A missing or stale signoff stays unverified. */ }
+  return { project: name, projectExists, checkedAt: new Date().toISOString(), stages,
+    previewAvailable: ['source', 'rig', 'layers'].every(id => stages.some(stage => stage.id === id && stage.state === 'observed')),
+    visualReview: signoffAt ? 'approved' : 'unverified', ...(signoffAt ? { visualReviewAt: signoffAt } : {}) };
+}
+export function productionStatusPlugin(root: string): Plugin {
+  return { name: 'studio-production-status', apply: 'serve', configureServer(server) {
+    server.middlewares.use(async (req, res, next) => {
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      if (!['/__studio/production-status', '/__studio/review-image', '/__studio/production-signoff'].includes(url.pathname)) return next();
+      const reply = (code: number, body: object) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
+      if (!localRequest(req, req.method !== 'GET')) return reply(403, { error: 'Local same-origin requests only.' });
+      const name = url.searchParams.get('project') ?? '';
+      if (!safeName.test(name)) return reply(400, { error: 'Invalid project name.' });
+      if (url.pathname === '/__studio/production-signoff') {
+        if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
+        const result = await inspectProduction(root, name).catch(() => null);
+        const review = result?.stages.find(stage => stage.id === 'review');
+        if (!result?.projectExists || !review || review.state !== 'observed' || review.issues.length) return reply(409, { error: 'Review artifacts are not ready or are stale.' });
+        try {
+          const repository = await realpath(root), project = join(repository, 'projects', name), manifest = await stat(join(project, 'review', 'poses.json'));
+          await writeFile(join(project, 'review', 'visual-signoff.json'), JSON.stringify({ version: 1, approvedAt: new Date().toISOString(), reviewModified: manifest.mtimeMs }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+          return reply(201, { approved: true });
+        } catch { return reply(409, { error: 'Visual signoff already exists or could not be saved.' }); }
+      }
+      if (req.method !== 'GET') return reply(405, { error: 'Use GET.' });
+      if (url.pathname === '/__studio/review-image') {
+        const file = url.searchParams.get('file') ?? '';
+        if (!/^[A-Za-z0-9_-]+\.png$/.test(file)) return reply(400, { error: 'Invalid review filename.' });
+        try {
+          const repository = await realpath(root), project = join(repository, 'projects', name);
+          const metadataPath = await realpath(join(project, 'review', 'poses.json'));
+          if (!metadataPath.startsWith(project + sep) || (await stat(metadataPath)).size > 2 * 1024 * 1024) return reply(403, { error: 'Invalid review metadata path.' });
+          const metadata = JSON.parse(await readFile(metadataPath, 'utf8'));
+          if (!Array.isArray(metadata.files) || !metadata.files.includes(file)) return reply(404, { error: 'Image not listed in the review manifest.' });
+          const actual = await realpath(join(project, 'review', file));
+          if (!actual.startsWith(project + sep)) return reply(403, { error: 'Image must stay in this project.' });
+          const info = await stat(actual);
+          if (!info.isFile() || info.size > 32 * 1024 * 1024) return reply(413, { error: 'Invalid review image size.' });
+          const bytes = await readFile(actual);
+          if (!bytes.subarray(0, 8).equals(signature)) return reply(422, { error: 'Invalid PNG signature.' });
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(bytes); return;
+        } catch { return reply(404, { error: 'Review image unavailable; refresh the project status.' }); }
+      }
+      try { reply(200, await inspectProduction(root, name)); } catch { reply(500, { error: 'Could not inspect project files.' }); }
+    });
+  } };
+}

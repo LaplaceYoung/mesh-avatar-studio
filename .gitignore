@@ -10,3 +10,6 @@ __pycache__/
 projects/
 work/
 samples/**/review/
+.env
+.env.*
+!.env.example

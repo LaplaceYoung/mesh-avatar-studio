@@ -86,3 +86,181 @@ Research access note: some documentation frontends returned HTTP 403; the Ant
 Design Splitter/theme docs were retrieved from the official GitHub repository,
 and Pi RPC docs from badlogic/pi-mono. npm metadata and installed CLI help were
 also checked. Do not interpret this as every search provider becoming available.
+
+## ACP migration — 2026-10-25 (supersedes terminal decisions above)
+
+The user explicitly rejected TUI and E2E-based iteration. Active editor Agent
+transport now uses the ACP SDK over stdio with pinned adapters for Claude,
+Codex and Pi. `node-pty` and xterm dependencies were removed. No E2E or unit test
+suite was run for this iteration: verification was TypeScript, lint, production
+build, actual initialize/session-new on all three adapters, and an authenticated
+HTTP/WebSocket/ACP bridge handshake with Codex. No inference/tool-execution
+success is claimed by handshake evidence.
+
+The Agent floats over the canvas, is initially minimized, can be dragged,
+resized and expanded, and remains mounted when minimized. Chat text, tool status,
+plans, permissions and cancellation are structured ACP events. Permission choices
+are validated against the actual request and expire when a turn/session ends.
+No client filesystem or terminal capability is advertised: the adapters use their
+own native agent tools. The bridge is not a security sandbox for native tools.
+
+Still pending: model/tool execution verification, richer tool results and diffs,
+configuration/model selection, image upload and consent, staged automatic rig
+creation, local crop/coordinate evidence, build/review correction loop and final
+user-visible artifact acceptance. No claim of improved vision accuracy yet.
+
+## Local illustration intake — 2026-10-25
+
+The project library Create tab now accepts a PNG via upload/drop. The local-only
+endpoint validates the PNG signature, dimensions (8192px edge / 16MP maximum),
+CRC and complete decode before saving unchanged bytes beneath an exclusive UUID
+in `projects/.uploads/`. File size is bounded to 24MiB. Paths are server-generated,
+not filenames supplied by a browser. The endpoint does not contact a model.
+
+The UI separately requires consent for the selected agent's configured vision
+model (which may be remote). This does not authorize an image-generation service.
+A consented task is prepared in the ACP composer for user submission. It specifies
+source-coordinate crops, eye detail grids, calibration, overlays, layer checks,
+pose review and bounded correction; no fake region coordinates/progress is shown.
+The original is left in private uploads, and new-project writes a separate target.
+
+A generated 64x96 transparent PNG was uploaded through the actual local endpoint:
+201 response, correct dimensions/transparency, and SHA-256 equality of request and
+stored bytes. This is intake evidence only, not model vision or avatar quality
+validation. No E2E or unit suite was run. Full autonomous pipeline remains pending.
+
+## Tool execution and regional evidence — 2026-10-25
+
+A real Codex ACP prompt asked only to read root package.json. It emitted a file
+read tool call, completed it, and returned the correct `mesh-avatar-studio` / `0.1.0`
+with `end_turn`. No permissions were bypassed, no file was modified and no image
+was sent. This proves one read-only tool cycle, not all providers or avatar creation.
+
+The conversation now exposes expandable tool input/output and ACP file diffs,
+rather than hiding everything behind a status title. Content is rendered as text,
+not executed HTML; displayed detail is bounded to 64,000 characters per tool.
+
+`uv run tools/vision-regions.py projects/<name> --regions projects/<name>/regions.json`
+creates an immutable evidence folder with clean enlarged crops, source-coordinate
+grids, a full-image region overview and a source-hashed transform manifest. The
+explicit region JSON array has `name`, integer source `box: [x0,y0,x1,y1]`, grid
+`step`, visual `observation` and self-reported `confidence: low|medium|high`.
+All crops remain under that private project; the tool rejects out-of-image boxes
+and redirected source/output paths. No inferred anatomy or automatic pass score
+is fabricated. Grid transforms include both axis scales and label margins so
+coordinates can be mapped back correctly. The upload task now requests this
+packet before rig authoring.
+
+Executed the tool on the previously generated private upload and visually opened
+its grid output. This verifies artifact generation/coordinate labeling, not vision
+accuracy on a real illustration. Semantic region accuracy and the full automated
+build/review cycle still require real-image evidence. No E2E/unit suite was run.
+
+## Artifact-linked progress — 2026-10-25
+
+Consented creation tasks now register their intended private project name with a
+production panel in the floating agent window. The panel polls a read-only local
+inspection route every five seconds without overlapping requests. It distinguishes
+missing, observed and invalid source/region/draft/rig/layer/review artifacts.
+Rig validation uses the runtime validator; PNG header checks and metadata/file
+presence are not presented as pixel decoding or visual quality approval. Review
+artifacts older than source, rig or layer metadata are flagged for regeneration.
+
+The generated-avatar action becomes available when source, valid rig and all
+listed layer files are observed. It resolves the actual project list before
+opening and prompts before replacing unsaved editor state. Visual review remains
+explicitly unverified: an agent completion message cannot flip it to passed.
+
+Actual local inspection: a nonexistent project reports all six stages missing
+and preview unavailable. Existing miko-qipao-copy reports source, valid rig and
+14 layer artifacts; regions/draft/review are missing and visual review remains
+unverified. The project was read only. No E2E/unit suite was run.
+
+Remaining: persistence/resumption of creation-task identity, source/rig/build
+content hashes rather than timestamps for complete staleness detection, review
+image inspector with explicit visual sign-off, and the real upload-to-build loop.
+
+## Pose review and correction feedback — 2026-10-25
+
+The production panel opens a dedicated review drawer with manifest-listed pose
+images, zoom, explicit reload and per-project saved defect notes. Users select
+an affected region and send a file-specific correction prompt to the ACP composer.
+No visual approval is inferred from opening images or sending feedback. The review
+image endpoint permits only PNG basenames listed in that private project's pose
+manifest, validates real paths/signatures, and returns no-store/nosniff responses.
+The latest creation-task identity survives refresh in browser preferences; restoring
+it only resumes local artifact inspection, never model invocation or consent.
+
+Executed the product's render-poses command on projects/miko-qipao-copy: generated
+21 pose/sway frames, crops and contact sheet. Opened the contact sheet visually.
+The local review route returned PNG bytes matching that exact file's SHA-256;
+production state changed to review observed while visualReview stayed unverified.
+This is rendering/serving evidence, not an E2E suite and not novel-image rig quality.
+
+## Agent model configuration — 2026-10-25
+
+The floating conversation now displays ACP-advertised session configuration,
+including current model and reasoning effort where supported. Selection values
+come from the adapter rather than a hardcoded model list. Both client and server
+prevent configuration changes during active work. The server validates config IDs
+and allowed values; only model/model_config/thought_level categories are editable.
+Permission and collaboration modes remain read-only through this endpoint.
+Failed changes preserve the last acknowledged configuration.
+
+Actual adapter checks: Claude, Codex and Pi each returned current model/effort
+configuration and acknowledged setting the model to its already selected value.
+No alternate model, permission bypass or inference was invoked for this check.
+This verifies configuration transport, not model vision accuracy. No E2E or unit
+suite was run; TypeScript/lint/build were used for code validation.
+
+## Mosi image generation
+
+Mosi integration is server-only and reads `MOSS_API_KEY` from the local process
+environment. Never paste the key into source, browser storage, prompts or a
+commit. The endpoint calls `moss-image-sft-1.0` with `response_format: url`, then
+downloads and validates the result before saving it privately under
+`projects/.uploads/`. It rejects non-PNG output, bad signatures/CRC, oversized
+images and dimensions outside the local processing limit. A Mosi URL is never
+returned to the browser.
+
+The fixed prompt is deliberately designed for tracing rather than generic image
+quality: centered head-and-shoulders character, separate facial features, clear
+hair locks/accessories, no face occlusion, clean silhouette and transparent or
+flat background. A separate negative prompt rejects sheets, multiple poses,
+backgrounds, text, merged silhouettes and covered eyes/mouth. This improves the
+input conditions for later region evidence and rigging but does not guarantee
+accurate segmentation.
+
+## Generation input preservation and calibration evidence — 2026-10-25
+
+Automatic connected-white removal is now opt-in, off by default. Every new Mosi
+result retains its exact validated bytes as original.png; source.png contains
+those same bytes unless removal was explicitly selected. The UI warns that
+connected pale hair/clothing can be damaged. The heuristic is not semantic
+segmentation and a nonempty alpha channel is not visual approval. Prompt now
+requests a solid white background, no faux transparency checkerboard, clear
+contours and top/side margins. No new paid generation was needed for this change.
+Downloads are read with a byte cap; dimensions are checked before PNG decoding;
+network calls have timeouts. Upload preview access now checks local origin and
+realpath containment and limits file size.
+
+The previously captured real ACP image-reading response for the random calibration
+PNG was scored only after the model response had been saved: median 0.72 px,
+maximum 1.33 px, PASS. The model used one image-view tool; no answer-key access
+was requested. This proves point-reading performance for that calibration, not
+anatomical region recognition or successful arbitrary-image rigging.
+TypeScript, lint and build passed. No E2E/unit suite was run. The chunk-size
+warning remains; the full autonomous avatar creation goal is not yet complete.
+
+## Explicit visual signoff — 2026-10-25
+
+The production inspector now keeps `visualReview` separate from artifact state.
+A review manifest can be present and valid while the project remains unverified.
+After opening the pose drawer and personally checking the images, the user may
+explicitly approve visual review. The local signoff is bound to the review
+manifest mtime; any later source, rig or layer change makes the signoff stale.
+The UI never auto-approves from Agent output, file existence or render success.
+
+This preserves the intended distinction between “the pipeline produced files”
+and “a human inspected the motion”. No E2E or unit suite was run; TypeScript and
+lint passed after the change.

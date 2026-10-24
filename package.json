@@ -27,19 +27,18 @@
     "pack-avatar": "node --experimental-strip-types tools/pack-avatar.mjs",
     "render-poses": "node --experimental-strip-types tools/render-poses.mjs",
     "quality": "node --experimental-strip-types tools/quality.mjs",
-    "doctor": "node tools/doctor.mjs",
-    "predev": "node tools/prepare-terminal.mjs",
-    "postinstall": "node tools/prepare-terminal.mjs"
+    "doctor": "node tools/doctor.mjs"
   },
   "dependencies": {
+    "@agentclientprotocol/claude-agent-acp": "^0.95.0",
+    "@agentclientprotocol/codex-acp": "^2.2.2",
+    "@agentclientprotocol/sdk": "^2.0.2",
     "@ant-design/icons": "^6.3.4",
     "@ant-design/x": "^2.9.0",
     "@mediapipe/tasks-vision": "0.10.21",
-    "@xterm/addon-fit": "^0.11.0",
-    "@xterm/xterm": "^6.0.0",
     "antd": "^6.6.7",
     "mesh-avatar": "*",
-    "node-pty": "^1.1.0",
+    "pi-acp": "^0.0.34",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "ws": "^8.22.0"

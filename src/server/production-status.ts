@@ -208,14 +208,32 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     if (metadata.fixedFps !== 60) result.issues.push('Motion review must be rendered at a fixed 60 FPS for comparable frame checks.');
     if (metadata.hairFrames !== 6) result.issues.push('Motion review metadata must contain 6 hair-sway frames.');
     const cropBounds = metadata.cropBounds as { eyes?: unknown; mouth?: unknown } | undefined;
+    const renderWidth = metadata.width, renderHeight = metadata.height;
+    if (!Number.isInteger(renderWidth) || !Number.isInteger(renderHeight) || renderWidth < 1 || renderHeight < 1 || renderWidth > 10000 || renderHeight > 10000) result.issues.push('Motion review metadata has invalid render dimensions; re-render poses from the current rig.');
     for (const name of ['eyes', 'mouth'] as const) {
       const bounds = cropBounds?.[name];
-      if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every((value: unknown) => Number.isFinite(value) && Number(value) >= 0)) result.issues.push(`Motion review ${name} crop bounds are missing or invalid; re-render poses from the current rig.`);
+      if (!Array.isArray(bounds) || bounds.length !== 4 || !bounds.every((value: unknown) => Number.isInteger(value) && Number(value) >= 0)) result.issues.push(`Motion review ${name} crop bounds are missing or invalid; re-render poses from the current rig.`);
+      else if (Number.isInteger(renderWidth) && Number.isInteger(renderHeight) && (bounds[0] + bounds[2] > renderWidth || bounds[1] + bounds[3] > renderHeight || bounds[2] < 1 || bounds[3] < 1)) result.issues.push(`Motion review ${name} crop bounds exceed the rendered canvas; re-render poses from the current rig.`);
     }
     if (!reviewFiles.has('contact-sheet.png')) result.issues.push('Review contact-sheet.png is missing; render-poses must produce the full motion sheet.');
     if (![...reviewFiles].some(name => /-eyes\.png$/.test(name))) result.issues.push('Eye crop evidence is missing; inspect a rendered eyes crop before visual signoff.');
     if (![...reviewFiles].some(name => /-mouth\.png$/.test(name))) result.issues.push('Mouth crop evidence is missing; inspect a rendered mouth crop before visual signoff.');
-    for (const file of metadata.files) await png(`review/${file}`, result);
+    const reviewSizes = new Map<string, { width: number; height: number }>();
+    for (const file of metadata.files) reviewSizes.set(file, await png(`review/${file}`, result));
+    if (Number.isInteger(renderWidth) && Number.isInteger(renderHeight)) {
+      for (const file of metadata.files as string[]) {
+        const size = reviewSizes.get(file);
+        if (!size) continue;
+        if (/^(?:rest|eyes-half|eyes-closed|mouth-open|turn-left|turn-right|look-up|look-down|tilt-left|tilt-right|body-left|body-right|angry|sad|surprise|hair-sway-[0-9]+)\.png$/.test(file) && (size.width !== renderWidth || size.height !== renderHeight)) result.issues.push(`Motion frame ${file} is ${size.width}x${size.height}, expected ${renderWidth}x${renderHeight}.`);
+        for (const name of ['eyes', 'mouth'] as const) if (file.endsWith(`-${name}.png`)) {
+          const bounds = cropBounds?.[name];
+          if (Array.isArray(bounds) && bounds.length === 4 && Number.isInteger(bounds[2]) && Number.isInteger(bounds[3])) {
+            const expectedWidth = 1000, expectedHeight = Math.round(bounds[3] / bounds[2] * 1000);
+            if (size.width !== expectedWidth || size.height !== expectedHeight) result.issues.push(`Motion ${name} crop ${file} is ${size.width}x${size.height}, expected ${expectedWidth}x${expectedHeight}.`);
+          }
+        }
+      }
+    }
     reviewModified = (await checkedFile('review/poses.json', 2 * 1024 * 1024)).modified;
     if (Math.max(rigModified, layersModified, source?.modified ?? 0) > reviewModified) result.issues.push('Review images are older than current inputs; render them again.');
   });

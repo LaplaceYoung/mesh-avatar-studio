@@ -41,6 +41,7 @@ function regionGeometryIssues(region: { name: string; box: number[] }, width: nu
 function actionFor(stage: ProductionStage, name: string) {
   const lowConfidence = stage.issues.find(issue => issue.startsWith('Low-confidence regions require visual review:'));
   const geometryIssue = stage.issues.find(issue => issue.includes('box') && (issue.includes('too small') || issue.includes('unusually wide')));
+  const motionIssue = stage.issues.find(issue => issue.startsWith('Motion review is missing'));
   const instruction: Record<ProductionStage['id'], string> = {
     source: `使用创建任务提供的本地源图运行 uv run tools/new-project.py <source.png> ${name}，确认 source.png 与上传源图尺寸和 SHA-256 一致。`,
     regions: geometryIssue
@@ -51,7 +52,9 @@ function actionFor(stage: ProductionStage, name: string) {
     draft: `读取当前 regions.json 和匹配的 work/vision-* 证据包，完善 rig.draft.json，运行 validate-rig、overlay 和眼部放大叠加。`,
     rig: `修正 rig.draft.json 后运行 validate-rig 和 build-layers，确认眼球层只含眼白/虹膜、头发蒙版不含脸和衣服。`,
     layers: `检查 source.png、rig.json、built/layers.json 和关键 PNG 尺寸，必要时重新运行 build-layers。`,
-    review: `运行 npm run render-poses -- projects/${name}，逐帧检查闭眼、张嘴、转头、倾斜和头发摆动。`,
+    review: motionIssue
+      ? `重新运行 npm run render-poses -- projects/${name}，确保 review/poses.json 覆盖闭眼、张嘴、左右转头、上下视线、左右倾斜、身体摆动、angry/sad/surprise 和 6 帧 hair-sway；然后逐帧检查眼部、嘴部、头发遮挡与裂缝。`
+      : `运行 npm run render-poses -- projects/${name}，逐帧检查闭眼、张嘴、转头、倾斜和头发摆动。`,
   };
   return { stage: stage.id, reason: stage.issues[0] ?? (stage.state === 'missing' ? 'Required artifacts are missing.' : 'Artifact requires inspection.'), instruction: instruction[stage.id] };
 }
@@ -195,6 +198,11 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const metadata = await json('review/poses.json', result);
     if (!Array.isArray(metadata.files) || !metadata.files.length || metadata.files.length > 256 || metadata.files.some((name: unknown) => typeof name !== 'string' || !/^[A-Za-z0-9_-]+\.png$/.test(name))) throw new Error('Invalid review image list.');
     const reviewFiles = new Set(metadata.files as string[]);
+    const requiredPoses = ['rest', 'eyes-half', 'eyes-closed', 'mouth-open', 'turn-left', 'turn-right', 'look-up', 'look-down', 'tilt-left', 'tilt-right', 'body-left', 'body-right', 'angry', 'sad', 'surprise'];
+    const missingPoses = requiredPoses.filter(name => !reviewFiles.has(`${name}.png`));
+    const hairFrames = [...reviewFiles].filter(name => /^hair-sway-[0-9]+\.png$/.test(name));
+    if (missingPoses.length) result.issues.push(`Motion review is missing required poses: ${missingPoses.join(', ')}.`);
+    if (hairFrames.length < 6) result.issues.push(`Motion review is missing hair-sway frames: expected 6, found ${hairFrames.length}.`);
     if (!reviewFiles.has('contact-sheet.png')) result.issues.push('Review contact-sheet.png is missing; render-poses must produce the full motion sheet.');
     if (![...reviewFiles].some(name => /-eyes\.png$/.test(name))) result.issues.push('Eye crop evidence is missing; inspect a rendered eyes crop before visual signoff.');
     if (![...reviewFiles].some(name => /-mouth\.png$/.test(name))) result.issues.push('Mouth crop evidence is missing; inspect a rendered mouth crop before visual signoff.');

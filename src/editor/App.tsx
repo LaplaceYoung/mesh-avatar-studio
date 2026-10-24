@@ -44,8 +44,11 @@ function Workspace() {
   const zh = language === 'zh';
   const openMenu = useRef<{ open: boolean } | null>(null);
   openMenu.current = { get open() { return projectLibrary; }, set open(value: boolean) { setProjectLibrary(value); } };
+  const showProjects = () => { setHelp(false); setAgentOpen(false); setProjectLibrary(true); };
+  const showHelp = () => { setProjectLibrary(false); setAgentOpen(false); setHelp(true); };
+  const toggleAgent = () => { setProjectLibrary(false); setHelp(false); setAgentOpen(value => !value); };
   useEffect(() => {
-    const show = () => { setProjectLibrary(false); setAgentOpen(true); };
+    const show = () => { setProjectLibrary(false); setHelp(false); setAgentOpen(true); };
     window.addEventListener('studio:agent-prompt', show);
     window.addEventListener('studio:agent-start', show);
     return () => { window.removeEventListener('studio:agent-prompt', show); window.removeEventListener('studio:agent-start', show); };
@@ -248,7 +251,7 @@ function Workspace() {
   };
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setHelp(false); if (openMenu.current) openMenu.current.open = false; }
+      if (event.key === 'Escape') { setHelp(false); setAgentOpen(false); if (openMenu.current) openMenu.current.open = false; }
       if (!(event.ctrlKey || event.metaKey)) return;
       if (jobRef.current) { if (['s', 'z'].includes(event.key.toLowerCase())) event.preventDefault(); return; }
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;
@@ -417,7 +420,7 @@ function Workspace() {
     void localProjects().then(list => {
       setProjects(list);
       const entry = list?.find(item => item.name === name && !item.error);
-      if (!entry) { setProjectLibrary(true); return; }
+      if (!entry) { showProjects(); return; }
       const load = () => openLocal(entry);
       if (dirty) modal.confirm({ title: zh ? '打开生成的角色？' : 'Open generated avatar?', content: zh ? '当前未保存的编辑会被替换，请先保存需要保留的内容。' : 'Unsaved changes will be replaced. Save changes you want to keep.', onOk: load });
       else void load();
@@ -433,7 +436,7 @@ function Workspace() {
   const projectPath = localProject?.relativePath ?? (pickedName || 'samples/miko-qipao');
   const refreshAfterAgent = () => {
     void localProjects().then(setProjects);
-    if (!localProject) { setProjectLibrary(true); return; }
+    if (!localProject) { showProjects(); return; }
     const reload = () => { void openLocal(localProject); };
     if (dirty) modal.confirm({ title: zh ? '重新加载磁盘上的项目？' : 'Reload project from disk?', content: zh ? '当前未保存的编辑会被磁盘版本替换。请先保存需要保留的修改。' : 'Unsaved editor changes will be replaced. Save changes you want to keep first.', onOk: reload });
     else reload();
@@ -449,14 +452,14 @@ function Workspace() {
       <nav className="studio-actions" aria-label={t.tools}>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t.rigFile} onChange={event => { void openFile(event.target.files?.[0]); event.target.value = ''; }} />
         <input ref={folderInput} type="file" multiple hidden aria-label={t.folderFiles} {...{ webkitdirectory: '' }} onChange={event => { void openFolder(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
-        <Button aria-label={t.openProject} icon={<FolderOpenOutlined />} onClick={() => { setProjectLibrary(true); void localProjects().then(setProjects); }}>{t.openProject}</Button>
+        <Button aria-label={t.openProject} icon={<FolderOpenOutlined />} onClick={() => { showProjects(); void localProjects().then(setProjects); }}>{t.openProject}</Button>
         <Tooltip title={`${t.save} · ⌘S`}><Button icon={<SaveOutlined />} aria-label={t.save} loading={saving} disabled={busy || playbackOnly} onClick={() => { void save(); }} /></Tooltip>
         <Button icon={<UndoOutlined />} aria-label={t.undo} disabled={!history.canUndo || busy || playbackOnly} onClick={() => setRig(history.undo())} />
         <Button icon={<RedoOutlined />} aria-label={t.redo} disabled={!history.canRedo || busy || playbackOnly} onClick={() => setRig(history.redo())} />
         <ExportAvatar busy={busy || saving} available={!!rootPath || !!pickedFiles.current} writable={writable} dirty={dirty} stale={changed.length > 0} onExport={exportFile} />
         <Button icon={<VideoCameraOutlined />} href={localProject || listedProject || !pickedName ? `/live.html?project=${encodeURIComponent(localProject?.name ?? listedProject?.name ?? 'sample-miko-qipao')}` : undefined} disabled={!!pickedName && !localProject && !listedProject} target="_blank" rel="noreferrer">{liveText[language].title}</Button>
-        <Button type={agentOpen ? 'primary' : 'default'} icon={<CodeOutlined />} aria-pressed={agentOpen} onClick={() => setAgentOpen(value => !value)}>Agent</Button>
-        <Button icon={<QuestionCircleOutlined />} aria-label={t.help} onClick={() => setHelp(true)} />
+        <Button type={agentOpen ? 'primary' : 'default'} icon={<CodeOutlined />} aria-pressed={agentOpen} onClick={toggleAgent}>Agent</Button>
+        <Button icon={<QuestionCircleOutlined />} aria-label={t.help} onClick={showHelp} />
         <Segmented aria-label={t.language} size="small" value={language} options={[{ value: 'zh', label: '中文' }, { value: 'en', label: 'EN' }, { value: 'ja', label: 'JA' }]} onChange={setLanguage} />
         <ThemeToggle />
       </nav>
@@ -509,7 +512,7 @@ function Workspace() {
             { key: 'variants', label: t.variantsTitle, forceRender: true, children: <>{!playbackOnly && <VariantsPanel project={localProject} projectPath={localProject?.relativePath ?? (pickedName ? `<${pickedName}>` : 'samples/miko-qipao')} assets={assets} rootPath={rootPath} busy={busy || saving} stale={changed.length > 0} onRun={runJob} mouthRequest={mouthRequest} onMouthPresence={setMouthSprites} />}</> },
           ]} /></div>
         </Splitter.Panel>
-      </Splitter> : <div className="empty-project"><h2>{checking ? t.checking : t.emptyTitle}</h2><p>{t.projectHelp}</p><Button type="primary" onClick={() => setProjectLibrary(true)}>{t.openProject}</Button>{errorNotice}</div>}
+      </Splitter> : <div className="empty-project"><h2>{checking ? t.checking : t.emptyTitle}</h2><p>{t.projectHelp}</p><Button type="primary" onClick={showProjects}>{t.openProject}</Button>{errorNotice}</div>}
     </div>
     <AgentWindow open={agentOpen} onOpenChange={setAgentOpen} status={agentStatus}>
       <AgentDock project={projectPath} selection={selected} onRefresh={refreshAfterAgent} />

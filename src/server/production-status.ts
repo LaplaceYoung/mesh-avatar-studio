@@ -18,9 +18,12 @@ const regionAliases = {
 };
 function hasRegion(names: Set<string>, required: Set<string>) { return [...required].some(name => names.has(name)); }
 function actionFor(stage: ProductionStage, name: string) {
+  const lowConfidence = stage.issues.find(issue => issue.startsWith('Low-confidence regions require visual review:'));
   const instruction: Record<ProductionStage['id'], string> = {
     source: `使用创建任务提供的本地源图运行 uv run tools/new-project.py <source.png> ${name}，确认 source.png 与上传源图尺寸和 SHA-256 一致。`,
-    regions: `重新逐区查看 source.png，补齐核心区域后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
+    regions: lowConfidence
+      ? `先打开并逐张检查当前 work/vision-* 的 overview、detail 和 grid，重点复核 ${lowConfidence.replace('Low-confidence regions require visual review: ', '')}。只有实际查看局部坐标后，才能修正 regions.json 的 box/observation/confidence；再运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并重新检查 overview/detail/grid。不要把 low confidence 直接改成 high。`
+      : `重新逐区查看 source.png，补齐核心区域后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
     draft: `读取当前 regions.json 和匹配的 work/vision-* 证据包，完善 rig.draft.json，运行 validate-rig、overlay 和眼部放大叠加。`,
     rig: `修正 rig.draft.json 后运行 validate-rig 和 build-layers，确认眼球层只含眼白/虹膜、头发蒙版不含脸和衣服。`,
     layers: `检查 source.png、rig.json、built/layers.json 和关键 PNG 尺寸，必要时重新运行 build-layers。`,

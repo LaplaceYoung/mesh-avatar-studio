@@ -30,6 +30,7 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
   const autoContinueTurns = useRef(0);
   const autoContinuePending = useRef(false);
   const autoContinueAfter = useRef('');
+  const autoContinueSignature = useRef('');
   useEffect(() => {
     setActivity(undefined);
     if (!task) return;
@@ -39,7 +40,7 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
     } catch { setActivity(undefined); }
   }, [task?.projectName]);
   useEffect(() => {
-  const receive = (event: Event) => { const detail = (event as CustomEvent<CreationTask>).detail; if (detail && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(detail.projectName)) { setTask(detail); setStatus(undefined); autoContinueTurns.current = 0; autoContinuePending.current = false; } };
+    const receive = (event: Event) => { const detail = (event as CustomEvent<CreationTask>).detail; if (detail && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(detail.projectName)) { setTask(detail); setStatus(undefined); autoContinueTurns.current = 0; autoContinuePending.current = false; autoContinueSignature.current = ''; } };
     window.addEventListener('studio:creation-task', receive);
     return () => window.removeEventListener('studio:creation-task', receive);
   }, []);
@@ -107,6 +108,13 @@ ${taskText}
       setError(zh ? `自动续跑已达到 ${MAX_AUTO_CONTINUE_TURNS} 个 ACP 回合上限，请检查当前阶段后手动继续。` : `Automatic continuation reached the ${MAX_AUTO_CONTINUE_TURNS}-turn limit; inspect the current stage before continuing manually.`);
       return;
     }
+    const signature = JSON.stringify(status.stages.map(stage => ({ id: stage.id, state: stage.state, issues: stage.issues })));
+    if (autoContinueSignature.current === signature) {
+      autoContinuePending.current = false;
+      setError(zh ? '自动续跑未观察到产物或阶段变化，已暂停以避免重复执行；请检查 Agent 输出后手动继续。' : 'Automatic continuation observed no artifact or stage change and paused to avoid repetition; inspect the Agent output before continuing manually.');
+      return;
+    }
+    autoContinueSignature.current = signature;
     autoContinueTurns.current += 1;
     resume();
   }, [status, productionBusy, task, zh]);

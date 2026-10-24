@@ -66,6 +66,18 @@ export function IllustrationCreator() {
       const response = await fetch(`/__studio/production-status?project=${encodeURIComponent(name)}`);
       const existing = await response.json();
       if (!response.ok) throw new Error(existing.error);
+      if (existing.projectExists && submittedProject === name && activity?.state === 'failed') {
+        const prompt = `恢复本次失败的角色制作 projects/${name}，不是新建项目。先阅读 AGENTS.md 和 docs/agent-guide.md。用户同意所选 Agent 使用其配置的视觉模型处理本次图片，不授权其他外部服务。
+先比较上传源图 ${upload.source} 与 projects/${name}/source.png 的尺寸和 SHA-256；不一致或文件缺失时停止并报告，绝不覆盖 source.png 或运行 new-project --force。
+源图确认一致后检查已有产物，从当前缺口继续：${existing.nextAction?.instruction ?? '现有产物阶段已齐全，请逐张检查姿态、眼部和嘴部裁剪，报告尚存视觉问题。'}
+保留有效绑定和用户无关修改，继续区域证据、绑定、图层构建和姿态审查；缺陷修复最多三轮。遇到依赖、权限或视觉证据阻断时报告，不得虚构通过。不要修改 samples/、reference/，不要提交私人图片。最终报告实际执行结果，回合结束不等于视觉验收。`;
+        const accepted = window.dispatchEvent(new CustomEvent('studio:agent-start', { cancelable: true, detail: { prompt, projectName: name, source: upload.source, autoContinue: false } }));
+        setSubmitted(accepted);
+        if (accepted) setActivity({ state: 'starting' });
+        else setError(zh ? 'Agent 暂未接受恢复任务，请检查当前会话后重试。' : 'The Agent did not accept recovery. Check the session and retry.');
+        setBusy(false);
+        return;
+      }
       if (existing.projectExists) throw new Error(zh ? '此项目目录已存在，请使用新名称，避免覆盖或跟踪错误项目。' : 'Project directory already exists. Choose a new name.');
     } catch (reason) { setError(String(reason)); setBusy(false); return; }
     setBusy(false);
@@ -101,7 +113,7 @@ export function IllustrationCreator() {
       <Checkbox checked={consent} onChange={event => setConsent(event.target.checked)}>{zh ? '同意所选 Agent 读取图片并交给其已配置的视觉模型处理（可能是云端）；不包含外部生图授权。' : 'Allow the selected agent to process this image with its configured vision model (possibly cloud-hosted). This does not authorize external image generation.'}</Checkbox>
       {(submitted || activity?.state === 'failed') && <Alert type={activity?.state === 'failed' ? 'error' : 'info'} showIcon title={activity?.state === 'failed' ? zh ? `${submittedProject} 制作失败，可重试` : `${submittedProject} creation failed; retry available` : activity?.state === 'completed' ? zh ? `${submittedProject} 的 Agent 回合已结束` : `${submittedProject}: Agent turn ended` : activity?.state === 'working' ? zh ? `${submittedProject} 正在制作` : `${submittedProject} is being created` : zh ? `已提交 ${submittedProject}，等待 ACP 执行` : `Submitted ${submittedProject}; waiting for ACP`} description={activity?.message ?? (zh ? '制作任务已进入 Agent 队列。请在悬浮 Agent 窗口查看工具调用和阶段进度，不要重复提交。失败后此按钮会恢复。' : 'The task is queued for the Agent. Follow tool calls and stage progress in the floating Agent window; do not submit again. The button returns after a failure.')} action={activity?.state === 'completed' ? <Button size="small" loading={checkingArtifacts} disabled={!previewAvailable || checkingArtifacts} onClick={() => window.dispatchEvent(new CustomEvent('studio:open-generated-project', { detail: submittedProject }))}>{zh ? '打开可用预览' : 'Open available preview'}</Button> : undefined} />}
       {activity?.state === 'completed' && <small className="muted">{checkingArtifacts ? zh ? '正在检查磁盘产物…' : 'Inspecting artifacts…' : previewAvailable ? zh ? '预览文件已就绪，不代表完整制作或视觉验收通过。' : 'Preview files are ready; this does not establish pipeline completion or visual approval.' : zh ? '尚无可打开的预览，请在 Agent 窗口查看缺失阶段并继续。' : 'No preview is available yet. Inspect missing stages in the Agent window and continue.'}</small>}
-      <Button type="primary" loading={busy} disabled={!consent || !validName || busy || submitted} onClick={() => { void prepare(); }}>{submitted ? zh ? '已提交，等待执行' : 'Submitted; waiting' : zh ? '开始 AI 制作' : 'Start AI creation'}</Button>
+      <Button type="primary" loading={busy} disabled={!consent || !validName || busy || submitted} onClick={() => { void prepare(); }}>{submitted ? zh ? '已提交，等待执行' : 'Submitted; waiting' : activity?.state === 'failed' && submittedProject === name ? zh ? '恢复本次制作' : 'Recover this production' : zh ? '开始 AI 制作' : 'Start AI creation'}</Button>
     </>}
     <Steps size="small" orientation="vertical" current={-1} items={(zh ? ['区域识别与坐标校准', '绑定、蒙版与图层构建', '动作审查与缺陷修正', '打开编辑器 / 直播'] : ['Inspect and calibrate', 'Rig and build layers', 'Review and correct motion', 'Open in editor / Live']).map(title => ({ title }))} />
     <Space><small className="muted">{zh ? '流程说明，不代表制作已完成；真实进度以 Agent 工具结果为准。' : 'Workflow outline only. Completion requires actual agent/tool results.'}</small></Space>

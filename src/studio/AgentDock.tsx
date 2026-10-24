@@ -61,6 +61,13 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName, state, message, at: new Date().toISOString() } }));
   };
   const clearProductionTurn = () => { const projectName = productionProject.current; productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); releaseLock(); return projectName; };
+  const failProduction = (message: string) => {
+    const projectName = pendingRef.current?.projectName || (productionTurn.current ? productionProject.current : '');
+    pendingRef.current = undefined;
+    setPendingCreation(undefined);
+    clearProductionTurn();
+    if (projectName) emitActivity('failed', message, projectName);
+  };
   const releaseLock = () => { if (readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, ''); };
   const acquireLock = (projectName: string) => { const current = readLock(); if (current?.owner && current.owner !== TAB_ID && Number(current.expiresAt) > Date.now()) { setForeignLock(current); return false; } savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName, expiresAt: Date.now() + LOCK_TTL })); setForeignLock(undefined); return true; };
   useEffect(() => {
@@ -95,7 +102,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       const response = await fetch('/__studio/agents', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Request': '1' }, body: JSON.stringify({ provider }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
       setSession(data); savePreference(SESSION_KEY, JSON.stringify(data));
-    } catch (err) { pendingRef.current = undefined; setPendingCreation(undefined); releaseLock(); setStatus('idle'); setError(String(err)); }
+    } catch (err) { failProduction(String(err)); setStatus('idle'); setError(String(err)); }
   };
   useEffect(() => {
     const receive = (event: globalThis.Event) => { const text = (event as CustomEvent<string>).detail; if (typeof text === 'string') setDraft(text); };
@@ -151,9 +158,9 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (event.type === 'exit') {
         setStatus('exited');
         if (!replaying) savePreference(SESSION_KEY, '');
-        if (!replaying && productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.', projectName); }
+        if (!replaying) failProduction(zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.');
       }
-      if (event.type === 'error' && !replaying) { setError(event.message ?? 'Agent error'); if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', event.message ?? 'Agent error', projectName); } setStatus(current => current === 'configuring' ? 'ready' : current); }
+      if (event.type === 'error' && !replaying) { setError(event.message ?? 'Agent error'); failProduction(event.message ?? 'Agent error'); setStatus(current => current === 'configuring' ? 'ready' : current); }
       if (event.type === 'complete') {
         streamId.current = null; setStatus('ready');
         // ACP completion means the turn ended, not that visual approval exists.
@@ -199,7 +206,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     ws.onmessage = event => { try { apply(JSON.parse(event.data)); } catch { setError('Invalid ACP event'); } };
     ws.onerror = () => setError(zh ? '连接失败；如果会话已过期，请重新连接 Agent。' : 'Connection failed; reconnect if the ACP session expired.');
     ws.onclose = event => {
-      if (event.code === 1008) { savePreference(SESSION_KEY, ''); clearProductionTurn(); setSession(undefined); setStatus('idle'); setError(zh ? 'ACP 会话已过期，请重新连接。' : 'ACP session expired; reconnect to start a new session.'); return; }
+      if (event.code === 1008) { savePreference(SESSION_KEY, ''); failProduction(zh ? 'ACP 会话已过期，请检查产物后重新连接。' : 'ACP session expired. Inspect artifacts before reconnecting.'); setSession(undefined); setStatus('idle'); setError(zh ? 'ACP 会话已过期，请重新连接。' : 'ACP session expired; reconnect to start a new session.'); return; }
       setStatus(current => current === 'exited' ? current : 'disconnected');
       if (productionTurn.current) {
         emitActivity('working', zh ? 'ACP 连接暂时断开，正在尝试恢复原制作任务。' : 'ACP connection lost; attempting to resume the existing production turn.');
@@ -219,10 +226,10 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       <Space wrap><Select aria-label="Agent" value={provider} disabled={!!session && status !== 'exited'} onChange={setProvider} style={{ width: 142 }} options={(providers.length ? providers : (Object.keys(labels) as Provider[]).map(id => ({ id, available: true }))).map(p => ({ value: p.id, label: `${labels[p.id]}${p.available ? '' : zh ? ' · 未安装' : ' · missing'}`, disabled: !p.available }))} />
         {(!session || status === 'exited') && <Button type="primary" loading={status === 'starting'} onClick={() => { void start(); }}>{zh ? '连接' : 'Connect'}</Button>}
         {status === 'disconnected' && <Button onClick={() => { setError(''); setAttempt(value => value + 1); }}>{zh ? '重连' : 'Reconnect'}</Button>}
-        {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { savePreference(SESSION_KEY, ''); clearProductionTurn(); setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
+        {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { savePreference(SESSION_KEY, ''); failProduction(zh ? '已结束 ACP 会话；请检查产物后继续。' : 'ACP session ended; inspect artifacts before resuming.'); setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
         <Button icon={<ReloadOutlined />} onClick={onRefresh} aria-label={zh ? '刷新项目' : 'Refresh project'} />
       </Space></div>
-    {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => { pendingRef.current = undefined; setPendingCreation(undefined); releaseLock(); }}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}
+    {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => failProduction(zh ? '已取消待提交任务，未发送新的制作请求。' : 'Pending submission cancelled; no new production prompt was sent.')}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}
     {status === 'disconnected' && productionTurn.current && <Alert type="warning" title={zh ? '制作任务仍在原 ACP 会话中' : 'Production turn is still held by the original ACP session'} description={zh ? '请点击“重连”恢复现有会话；不要提交新的制作任务，避免重复写入项目。' : 'Click Reconnect to attach to the existing session. Do not submit another production task.'} />}
     {foreignLock && <Alert type="warning" title={zh ? `其他标签页正在制作${foreignLock.projectName ? `：${foreignLock.projectName}` : ''}` : `Another tab is producing${foreignLock.projectName ? `: ${foreignLock.projectName}` : ''}`} description={zh ? `租约约 ${Math.max(1, Math.ceil((Number(foreignLock.expiresAt) - Date.now()) / 1000))} 秒后到期。` : `Lease expires in about ${Math.max(1, Math.ceil((Number(foreignLock.expiresAt) - Date.now()) / 1000))} seconds.`} />}
     {error && <Alert type="error" title={error} closable onClose={() => setError('')} />}

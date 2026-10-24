@@ -385,3 +385,12 @@ semantic segmentation; light hair/clothes touching the border may be damaged.
 Direct local HTTP verification with a synthetic white-border/dark-center PNG
 confirmed both option states, exact original-byte preservation, transparent
 corners only when enabled, and unchanged opaque center. No E2E was run.
+
+Pending production now uses the same terminal cleanup as an active turn when
+ACP initialization fails, the process exits, the session expires, or the user
+cancels the queued submission/ends the session. Cleanup clears the pending
+prompt and production marker, releases this tab's lease, and emits a failed
+activity for the affected project. This lets the creator exit its submitted
+state instead of remaining stuck. Transient socket disconnects are not terminal
+and continue using the existing reconnect path. Real-provider initialization
+failure and pending-cancellation UI behavior still require manual verification.

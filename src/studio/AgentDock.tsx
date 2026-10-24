@@ -12,6 +12,9 @@ type Provider = 'claude' | 'codex' | 'pi';
 type Session = { id: string; token: string; provider: Provider };
 const SESSION_KEY = 'studio-acp-session';
 const TURN_KEY = 'studio-acp-production-turn';
+const LOCK_KEY = 'studio-acp-production-lock';
+const LOCK_TTL = 90_000;
+const TAB_ID = (() => { try { const old = sessionStorage.getItem('studio-tab-id'); if (old) return old; const value = crypto.randomUUID(); sessionStorage.setItem('studio-tab-id', value); return value; } catch { return `tab-${Math.random().toString(36).slice(2)}`; } })();
 function readSavedSession(): Session | undefined {
   try {
     const value = JSON.parse(readPreference(SESSION_KEY) ?? 'null');
@@ -24,6 +27,7 @@ function readSavedTurn() {
     return value && typeof value.sessionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value.projectName) && typeof value.source === 'string' ? { sessionId: value.sessionId, projectName: value.projectName, source: value.source } : undefined;
   } catch { return undefined; }
 }
+function readLock(): { owner?: string; projectName?: string; expiresAt?: number } | undefined { try { return JSON.parse(readPreference(LOCK_KEY) ?? 'null') ?? undefined; } catch { return undefined; } }
 type Entry = { id: string; kind: 'user' | 'assistant' | 'tool' | 'plan'; text: string; status?: string; detail?: string };
 type Permission = { id: string; tool: { title?: string; rawInput?: unknown }; options: { optionId: string; name: string; kind: string }[] };
 type Block = { type: string; text?: string; path?: string; oldText?: string | null; newText?: string; content?: Block };
@@ -54,7 +58,10 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     if (!productionProject.current) return;
     window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName: productionProject.current, state, message, at: new Date().toISOString() } }));
   };
-  const clearProductionTurn = () => { productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); };
+  const clearProductionTurn = () => { productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); releaseLock(); };
+  const releaseLock = () => { if (readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, ''); };
+  const acquireLock = (projectName: string) => { const current = readLock(); if (current?.owner && current.owner !== TAB_ID && Number(current.expiresAt) > Date.now()) return false; savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName, expiresAt: Date.now() + LOCK_TTL })); return true; };
+  useEffect(() => { if (!productionTurn.current) return; const renew = () => { if (productionTurn.current && readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: productionProject.current, expiresAt: Date.now() + LOCK_TTL })); }; renew(); const timer = setInterval(renew, 30_000); return () => clearInterval(timer); }, [status]);
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
   const start = async () => {
     setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);
@@ -73,6 +80,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       const value = (event as CustomEvent<{ prompt: string; projectName: string; source: string }>).detail;
       if (!value || typeof value.prompt !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.projectName)) return;
       if (pendingRef.current || productionTurn.current || status === 'working' || status === 'starting') { setError(zh ? '已有制作任务正在执行，请等待完成或失败后再提交新的任务。' : 'A production task is already running. Wait for it to complete or fail before submitting another.'); return; }
+      if (!acquireLock(value.projectName)) { setError(zh ? '另一个标签页正在制作，请等待完成或关闭后再试。' : 'Another tab is already running production. Wait for it to finish or close it before retrying.'); return; }
       pendingRef.current = value; setPendingCreation(value);
       productionProject.current = value.projectName;
       emitActivity('starting', zh ? '已确认制作任务，正在连接 ACP。' : 'Production task confirmed; connecting ACP.');
@@ -88,7 +96,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
     // Consume before sending. Reconnection must not silently duplicate a creation request.
-    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName, source: pending.source })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
+    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName, source: pending.source })); savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: pending.projectName, expiresAt: Date.now() + LOCK_TTL })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
     socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));
     pinned.current = true;
   }, [status, pendingCreation]);

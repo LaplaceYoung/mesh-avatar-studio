@@ -6,9 +6,17 @@ import { Sender } from '@ant-design/x';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useI18n } from '../editor/i18n';
 import type { ProductionActivity } from '../shared/production';
+import { readPreference, savePreference } from '../editor/preferences';
 
 type Provider = 'claude' | 'codex' | 'pi';
 type Session = { id: string; token: string; provider: Provider };
+const SESSION_KEY = 'studio-acp-session';
+function readSavedSession(): Session | undefined {
+  try {
+    const value = JSON.parse(readPreference(SESSION_KEY) ?? 'null');
+    return value && /^[a-f0-9]{32}$/.test(value.id) && typeof value.token === 'string' && value.token.length === 64 && ['claude', 'codex', 'pi'].includes(value.provider) ? value : undefined;
+  } catch { return undefined; }
+}
 type Entry = { id: string; kind: 'user' | 'assistant' | 'tool' | 'plan'; text: string; status?: string; detail?: string };
 type Permission = { id: string; tool: { title?: string; rawInput?: unknown }; options: { optionId: string; name: string; kind: string }[] };
 type Block = { type: string; text?: string; path?: string; oldText?: string | null; newText?: string; content?: Block };
@@ -19,8 +27,8 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const { language } = useI18n(), zh = language === 'zh';
   const [provider, setProvider] = useState<Provider>('claude');
   const [providers, setProviders] = useState<{ id: Provider; available: boolean }[]>([]);
-  const [session, setSession] = useState<Session>();
-  const [status, setStatus] = useState('idle');
+  const [session, setSession] = useState<Session | undefined>(readSavedSession);
+  const [status, setStatus] = useState(() => readSavedSession() ? 'starting' : 'idle');
   const [pendingCreation, setPendingCreation] = useState<{ prompt: string; projectName: string; source: string }>();
   const pendingRef = useRef<typeof pendingCreation>(undefined);
   const productionTurn = useRef(false);
@@ -41,7 +49,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     try {
       const response = await fetch('/__studio/agents', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Request': '1' }, body: JSON.stringify({ provider }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
-      setSession(data);
+      setSession(data); savePreference(SESSION_KEY, JSON.stringify(data));
     } catch (err) { setStatus('idle'); setError(String(err)); }
   };
   useEffect(() => {
@@ -82,6 +90,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (event.type === 'state' && event.state) setStatus(event.state);
       if (event.type === 'exit') {
         setStatus('exited');
+        savePreference(SESSION_KEY, '');
         if (productionTurn.current) { productionTurn.current = false; emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.'); }
       }
       if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { productionTurn.current = false; emitActivity('failed', event.message ?? 'Agent error'); } setStatus(current => current === 'configuring' ? 'ready' : current); }
@@ -119,8 +128,9 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/__studio/agent-session`); socket.current = ws;
     ws.onopen = () => ws.send(JSON.stringify({ type: 'attach', ...session }));
     ws.onmessage = event => { try { apply(JSON.parse(event.data)); } catch { setError('Invalid ACP event'); } };
-    ws.onerror = () => setError(zh ? '连接失败，请检查本地服务。' : 'Connection failed. Check the local server.');
-    ws.onclose = () => {
+    ws.onerror = () => setError(zh ? '连接失败；如果会话已过期，请重新连接 Agent。' : 'Connection failed; reconnect if the ACP session expired.');
+    ws.onclose = event => {
+      if (event.code === 1008) { savePreference(SESSION_KEY, ''); setSession(undefined); setStatus('idle'); setError(zh ? 'ACP 会话已过期，请重新连接。' : 'ACP session expired; reconnect to start a new session.'); return; }
       setStatus(current => current === 'exited' ? current : 'disconnected');
       if (productionTurn.current) emitActivity('working', zh ? 'ACP 连接暂时断开；请点击重连，原制作任务仍保留。' : 'ACP connection lost; reconnect to resume the existing production turn.');
     };
@@ -134,7 +144,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       <Space wrap><Select aria-label="Agent" value={provider} disabled={!!session && status !== 'exited'} onChange={setProvider} style={{ width: 142 }} options={(providers.length ? providers : (Object.keys(labels) as Provider[]).map(id => ({ id, available: true }))).map(p => ({ value: p.id, label: `${labels[p.id]}${p.available ? '' : zh ? ' · 未安装' : ' · missing'}`, disabled: !p.available }))} />
         {(!session || status === 'exited') && <Button type="primary" loading={status === 'starting'} onClick={() => { void start(); }}>{zh ? '连接' : 'Connect'}</Button>}
         {status === 'disconnected' && <Button onClick={() => { setError(''); setAttempt(value => value + 1); }}>{zh ? '重连' : 'Reconnect'}</Button>}
-        {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
+        {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { savePreference(SESSION_KEY, ''); setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
         <Button icon={<ReloadOutlined />} onClick={onRefresh} aria-label={zh ? '刷新项目' : 'Refresh project'} />
       </Space></div>
     {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => { pendingRef.current = undefined; setPendingCreation(undefined); }}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}

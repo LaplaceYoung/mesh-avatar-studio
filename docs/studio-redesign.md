@@ -316,3 +316,12 @@ line intact. The rig validator passed and no new pose tear was visible. The
 project and generated review images remain ignored local evidence; they are not
 committed. A small residual risk remains at the right outer eyelid boundary when
 hair or shadow touches the eye ROI.
+
+## ACP session recovery
+
+The dock persists only the local ACP capability tuple needed to reattach an
+existing session after a page refresh. It never persists a prompt or silently
+replays a production turn. A successful `session/new`/attach restores the
+conversation and permission boundary; an expired capability clears local state
+and requires an explicit reconnect. Historical production activity remains
+informational and never creates a busy lock by itself.

@@ -68,6 +68,14 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     };
     renew(); const timer = setInterval(renew, 30_000); return () => clearInterval(timer);
   }, [status, pendingCreation]);
+  useEffect(() => {
+    const receive = (event: StorageEvent) => {
+      if (event.key !== LOCK_KEY || event.newValue) return;
+      if (pendingRef.current && !productionTurn.current) { pendingRef.current = undefined; setPendingCreation(undefined); setError(zh ? '其他标签页已释放制作租约，可以重新提交。' : 'Another tab released the production lease; you can submit again.'); }
+    };
+    window.addEventListener('storage', receive);
+    return () => window.removeEventListener('storage', receive);
+  }, [zh]);
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
   const start = async () => {
     setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);

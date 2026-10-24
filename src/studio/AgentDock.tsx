@@ -69,7 +69,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       const response = await fetch('/__studio/agents', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Request': '1' }, body: JSON.stringify({ provider }) });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
       setSession(data); savePreference(SESSION_KEY, JSON.stringify(data));
-    } catch (err) { setStatus('idle'); setError(String(err)); }
+    } catch (err) { pendingRef.current = undefined; setPendingCreation(undefined); releaseLock(); setStatus('idle'); setError(String(err)); }
   };
   useEffect(() => {
     const receive = (event: globalThis.Event) => { const text = (event as CustomEvent<string>).detail; if (typeof text === 'string') setDraft(text); };
@@ -173,7 +173,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
         {session && status !== 'exited' && <Button onClick={() => { if (send({ type: 'stop' })) { savePreference(SESSION_KEY, ''); clearProductionTurn(); setStatus('exited'); setPermissions([]); } }}>{zh ? '结束会话' : 'End session'}</Button>}
         <Button icon={<ReloadOutlined />} onClick={onRefresh} aria-label={zh ? '刷新项目' : 'Refresh project'} />
       </Space></div>
-    {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => { pendingRef.current = undefined; setPendingCreation(undefined); }}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}
+    {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => { pendingRef.current = undefined; setPendingCreation(undefined); releaseLock(); }}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}
     {status === 'disconnected' && productionTurn.current && <Alert type="warning" title={zh ? '制作任务仍在原 ACP 会话中' : 'Production turn is still held by the original ACP session'} description={zh ? '请点击“重连”恢复现有会话；不要提交新的制作任务，避免重复写入项目。' : 'Click Reconnect to attach to the existing session. Do not submit another production task.'} />}
     {error && <Alert type="error" title={error} closable onClose={() => setError('')} />}
     {session && <Collapse ghost className="agent-configuration" items={[{ key: 'configuration', label: zh ? '模型与推理配置' : 'Model and reasoning settings', children: config.length ? <div className="agent-config-fields">{config.map(option => {

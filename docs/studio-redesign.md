@@ -402,3 +402,19 @@ cannot replenish the three-attempt budget. Pending unsent creation tasks also
 use bounded reconnect; consumed prompts are still not resent. Explicit manual
 reconnect starts a new budget. Real-provider network flapping remains a manual
 verification item; build/lint alone do not validate this behavior.
+
+## Real-image background pipeline check
+
+Ran the existing local upload endpoint with optional background removal on an
+existing opaque illustration, then built layers and rendered all 21 pose/sway
+frames in a separate ignored diagnostic project. The original project was not
+modified. The upload preflight reported alpha coverage 0.4786. Source and base
+layer corner alpha changed from 255 to 0; visual inspection of the new contact
+sheet showed the rotating white rectangle absent in both tilt frames.
+
+This is a product-tool run, not an E2E test suite or an ACP end-to-end run.
+It reused the existing rig to isolate background handling; it does not prove
+new-image recognition or automatic tracing. No optional drawn sprites were
+present in the diagnostic run. Fine hair/ribbon edges, temporal quality and
+other backgrounds remain unverified. Private images and derived assets stay
+ignored under projects/ and are not included in the repository commit.

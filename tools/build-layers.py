@@ -157,7 +157,9 @@ def fill_skin(img, hole):
     est = rgb.copy()
     known = skin.astype(np.float32)
     for sigma in (3, 6, 12, 24, 48):
-        num = cv2.GaussianBlur(rgb * known[..., None], (0, 0), sigma)
+        # Newly weighted pixels contain inferred skin, not the original iris or
+        # hair colour. Reusing rgb here would propagate that removed ink back in.
+        num = cv2.GaussianBlur(est * known[..., None], (0, 0), sigma)
         den = cv2.GaussianBlur(known, (0, 0), sigma)[..., None]
         fill = (known == 0) & (den[..., 0] > 0.02)
         est[fill] = (num / np.maximum(den, 1e-4))[fill]

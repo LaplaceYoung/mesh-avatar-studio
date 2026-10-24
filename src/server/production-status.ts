@@ -23,7 +23,7 @@ function actionFor(stage: ProductionStage, name: string) {
     source: `使用创建任务提供的本地源图运行 uv run tools/new-project.py <source.png> ${name}，确认 source.png 与上传源图尺寸和 SHA-256 一致。`,
     regions: lowConfidence
       ? `先打开并逐张检查当前 work/vision-* 的 overview、detail 和 grid，重点复核 ${lowConfidence.replace('Low-confidence regions require visual review: ', '')}。只有实际查看局部坐标后，才能修正 regions.json 的 box/observation/confidence；再运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并重新检查 overview/detail/grid。不要把 low confidence 直接改成 high。`
-      : `重新逐区查看 source.png，补齐核心区域后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
+      : `重新逐区查看 source.png，补齐核心区域并确保左右眼和 mouth 都使用 step=5 或更细，然后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
     draft: `读取当前 regions.json 和匹配的 work/vision-* 证据包，完善 rig.draft.json，运行 validate-rig、overlay 和眼部放大叠加。`,
     rig: `修正 rig.draft.json 后运行 validate-rig 和 build-layers，确认眼球层只含眼白/虹膜、头发蒙版不含脸和衣服。`,
     layers: `检查 source.png、rig.json、built/layers.json 和关键 PNG 尺寸，必要时重新运行 build-layers。`,
@@ -92,6 +92,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const leftEye = [...regionAliases.leftEye].find(name => names.has(name)), rightEye = [...regionAliases.rightEye].find(name => names.has(name));
     if (leftEye && regions.find(region => region.name === leftEye)?.step > 5) throw new Error('The image-left eye region must use a grid step of 5 px or finer.');
     if (rightEye && regions.find(region => region.name === rightEye)?.step > 5) throw new Error('The image-right eye region must use a grid step of 5 px or finer.');
+    const mouth = [...regionAliases.mouth].find(name => names.has(name));
+    if (mouth && regions.find(region => region.name === mouth)?.step > 5) throw new Error('The mouth region must use a grid step of 5 px or finer for lip-sync deformation.');
     const expectedHash = await sourceHash();
     const work = join(project, 'work');
     let evidence: string | undefined;

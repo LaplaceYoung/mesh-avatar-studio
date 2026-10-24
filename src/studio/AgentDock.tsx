@@ -5,6 +5,7 @@ import { ProductionProgress } from './ProductionProgress';
 import { Sender } from '@ant-design/x';
 import { ReloadOutlined } from '@ant-design/icons';
 import { useI18n } from '../editor/i18n';
+import type { ProductionActivity } from '../shared/production';
 
 type Provider = 'claude' | 'codex' | 'pi';
 type Session = { id: string; token: string; provider: Provider };
@@ -23,11 +24,16 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const [pendingCreation, setPendingCreation] = useState<{ prompt: string; projectName: string; source: string }>();
   const pendingRef = useRef<typeof pendingCreation>(undefined);
   const productionTurn = useRef(false);
+  const productionProject = useRef('');
   const [config, setConfig] = useState<SessionConfigOption[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]), [permissions, setPermissions] = useState<Permission[]>([]);
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
   const socket = useRef<WebSocket | null>(null), sequence = useRef(0), streamId = useRef<string | null>(null);
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
+  const emitActivity = (state: ProductionActivity['state'], message?: string) => {
+    if (!productionProject.current) return;
+    window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName: productionProject.current, state, message, at: new Date().toISOString() } }));
+  };
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
   const start = async () => {
     setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);
@@ -47,6 +53,8 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (!value || typeof value.prompt !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.projectName)) return;
       if (pendingRef.current) { setError(zh ? '已有待发送制作任务，请先取消或完成连接。' : 'A creation task is already pending. Connect or cancel it first.'); return; }
       pendingRef.current = value; setPendingCreation(value);
+      productionProject.current = value.projectName;
+      emitActivity('starting', zh ? '已确认制作任务，正在连接 ACP。' : 'Production task confirmed; connecting ACP.');
       window.dispatchEvent(new CustomEvent('studio:creation-task', { detail: { projectName: value.projectName, source: value.source } }));
       // A confirmed creation task owns the next connection. Starting ACP here
       // removes an avoidable second click while keeping provider choice explicit.
@@ -59,7 +67,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
     // Consume before sending. Reconnection must not silently duplicate a creation request.
-    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; setStatus('working');
+    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
     socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));
     pinned.current = true;
   }, [status, pendingCreation]);
@@ -72,13 +80,13 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (event.type === 'configuration' && event.configOptions) setConfig(event.configOptions);
       if (event.type === 'state' && event.state) setStatus(event.state);
       if (event.type === 'exit') setStatus('exited');
-      if (event.type === 'error') { setError(event.message ?? 'Agent error'); setStatus(current => current === 'configuring' ? 'ready' : current); }
+      if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { productionTurn.current = false; emitActivity('failed', event.message ?? 'Agent error'); } setStatus(current => current === 'configuring' ? 'ready' : current); }
       if (event.type === 'complete') {
         streamId.current = null; setStatus('ready');
         // ACP completion means the turn ended, not that visual approval exists.
         // Refresh through the existing dirty-state guard so disk changes become
         // visible without replacing unsaved editor work silently.
-        if (productionTurn.current) { productionTurn.current = false; window.setTimeout(onRefresh, 400); }
+        if (productionTurn.current) { productionTurn.current = false; emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.'); window.setTimeout(onRefresh, 400); }
       }
       if (event.type === 'permission' && event.id && event.options) setPermissions(items => [...items.filter(p => p.id !== event.id), event as Permission]);
       if (event.type === 'permission_resolved') setPermissions(items => items.filter(p => p.id !== event.id));

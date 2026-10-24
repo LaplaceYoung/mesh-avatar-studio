@@ -42,7 +42,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const savedSession = readSavedSession();
   const savedTurn = readSavedTurn();
   const [status, setStatus] = useState(() => savedSession ? 'starting' : 'idle');
-  const [pendingCreation, setPendingCreation] = useState<{ prompt: string; projectName: string; source: string }>();
+  const [pendingCreation, setPendingCreation] = useState<{ prompt: string; projectName: string; source: string; autoContinue?: boolean }>();
   const pendingRef = useRef<typeof pendingCreation>(undefined);
   const productionTurn = useRef(!!savedTurn && !!savedSession && savedTurn.sessionId === savedSession.id);
   const productionProject = useRef(savedTurn?.projectName ?? '');
@@ -103,14 +103,14 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   }, []);
   useEffect(() => {
     const receive = (event: globalThis.Event) => {
-      const value = (event as CustomEvent<{ prompt: string; projectName: string; source: string }>).detail;
+      const value = (event as CustomEvent<{ prompt: string; projectName: string; source: string; autoContinue?: boolean }>).detail;
       if (!value || typeof value.prompt !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.projectName)) { event.preventDefault(); return; }
       if (pendingRef.current || productionTurn.current || status === 'working' || status === 'starting') { event.preventDefault(); setError(zh ? '已有制作任务正在执行，请等待完成或失败后再提交新的任务。' : 'A production task is already running. Wait for it to complete or fail before submitting another.'); return; }
       if (!acquireLock(value.projectName)) { event.preventDefault(); setError(zh ? '另一个标签页正在制作，请等待完成或关闭后再试。' : 'Another tab is already running production. Wait for it to finish or close it before retrying.'); return; }
       pendingRef.current = value; setPendingCreation(value);
       productionProject.current = value.projectName;
       emitActivity('starting', zh ? '已确认制作任务，正在连接 ACP。' : 'Production task confirmed; connecting ACP.');
-      window.dispatchEvent(new CustomEvent('studio:creation-task', { detail: { projectName: value.projectName, source: value.source } }));
+      window.dispatchEvent(new CustomEvent('studio:creation-task', { detail: { projectName: value.projectName, source: value.source, autoContinue: value.autoContinue === true } }));
       // A confirmed creation task owns the next connection. Starting ACP here
       // removes an avoidable second click while keeping provider choice explicit.
       if (!session && status === 'idle') void start();

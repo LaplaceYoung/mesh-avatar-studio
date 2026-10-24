@@ -1,7 +1,7 @@
 import { PoseReview } from './PoseReview';
 import { RegionEvidenceReview } from './RegionEvidenceReview';
 import { readPreference, savePreference } from '../editor/preferences';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Space, Steps, Tag } from 'antd';
 import type { CreationTask, ProductionActivity, ProductionStatus } from '../shared/production';
 import { useI18n } from '../editor/i18n';
@@ -25,6 +25,9 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
   const [refreshTick, setRefreshTick] = useState(0);
   const [activity, setActivity] = useState<ProductionActivity>();
   const [error, setError] = useState('');
+  const autoContinueTurns = useRef(0);
+  const autoContinuePending = useRef(false);
+  const autoContinueAfter = useRef('');
   useEffect(() => {
     setActivity(undefined);
     if (!task) return;
@@ -34,7 +37,7 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
     } catch { setActivity(undefined); }
   }, [task?.projectName]);
   useEffect(() => {
-    const receive = (event: Event) => { const detail = (event as CustomEvent<CreationTask>).detail; if (detail && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(detail.projectName)) { setTask(detail); setStatus(undefined); } };
+  const receive = (event: Event) => { const detail = (event as CustomEvent<CreationTask>).detail; if (detail && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(detail.projectName)) { setTask(detail); setStatus(undefined); autoContinueTurns.current = 0; autoContinuePending.current = false; } };
     window.addEventListener('studio:creation-task', receive);
     return () => window.removeEventListener('studio:creation-task', receive);
   }, []);
@@ -63,6 +66,8 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
       if (detail?.projectName === task?.projectName) {
         setActivity(detail);
         savePreference(`studio-production-activity:${detail.projectName}`, JSON.stringify(detail));
+        if (detail.state === 'completed' && task.autoContinue) { autoContinuePending.current = true; autoContinueAfter.current = status?.checkedAt ?? ''; setRefreshTick(value => value + 1); }
+        if (detail.state === 'failed') autoContinuePending.current = false;
       }
     };
     window.addEventListener('studio:production-activity', receive);
@@ -76,6 +81,7 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
   const needsSignoff = !!status && !nextStage && status.visualReview !== 'approved';
   const resume = () => {
     if (!status || !nextStage) return;
+    autoContinuePending.current = false;
     const taskText = nextStage.id === 'source'
       ? `先创建项目骨架：确认 ${task.source} 是当前上传的本地 PNG，运行 uv run tools/new-project.py ${task.source} ${task.projectName}；如果目标目录已存在，停止并报告，不要覆盖。创建后检查 source.png 与输入尺寸和 SHA-256 一致，再进入区域证据阶段。`
       : status.nextAction?.instruction ?? `请处理 ${titles[nextStage.id]} 阶段：检查当前项目文件和视觉证据，完成后运行对应校验。`;
@@ -86,8 +92,22 @@ ${taskText}
 
 完成当前阶段后，继续自动处理所有后续未完成阶段：区域证据、绑定草稿、正式绑定、图层构建和完整姿态审查。每个阶段都必须读取实际文件、运行对应校验并查看生成的证据；不要因为某一步工具成功就宣称视觉质量通过。只有遇到真实阻断（缺少依赖、源图不匹配、权限或视觉证据无法确认）才停止，并明确报告阻断原因、已完成阶段和下一条可执行命令。不要提交或修改 samples/、reference/，不要调用未经授权的外部生图服务。
 
-最后报告实际执行的命令、文件、完整链路停在哪个阶段，以及仍未通过的视觉问题。`, projectName: task.projectName, source: task.source } }));
+最后报告实际执行的命令、文件、完整链路停在哪个阶段，以及仍未通过的视觉问题。`, projectName: task.projectName, source: task.source, autoContinue: task.autoContinue === true } }));
   };
+  useEffect(() => {
+    if (!autoContinuePending.current || !task.autoContinue || productionBusy || !status || status.checkedAt === autoContinueAfter.current) return;
+    if (!status.stages.some(stage => stage.state !== 'observed')) {
+      autoContinuePending.current = false;
+      return;
+    }
+    if (autoContinueTurns.current >= 6) {
+      autoContinuePending.current = false;
+      setError(zh ? '自动续跑已达到 6 个 ACP 回合上限，请检查当前阶段后手动继续。' : 'Automatic continuation reached the six-turn limit; inspect the current stage before continuing manually.');
+      return;
+    }
+    autoContinueTurns.current += 1;
+    resume();
+  }, [status, productionBusy, task, zh]);
   return <div className="production-progress"><Collapse ghost defaultActiveKey={['production']} items={[{ key: 'production', label: <Space><strong>{zh ? '制作产物' : 'Production artifacts'}</strong><small>{task.projectName}</small></Space>, children: <>
     {error && <Alert type="warning" title={error} />}
     {activity && <Alert className="production-activity" type={productionBusy ? 'info' : activity.state === 'failed' ? 'error' : activity.state === 'completed' ? 'success' : 'warning'} showIcon title={productionBusy ? activity.message ?? (zh ? 'ACP 正在执行' : 'ACP is running') : activity.message ?? (zh ? '上次 ACP 活动' : 'Last ACP activity')} description={productionBusy ? (zh ? '当前会话正在执行；断线时请重连，不要重复提交任务。' : 'The current session is running; reconnect after a disconnect instead of submitting another task.') : (zh ? `历史活动 · ${new Date(activity.at).toLocaleString()}` : `Historical activity · ${new Date(activity.at).toLocaleString()}`)} />}

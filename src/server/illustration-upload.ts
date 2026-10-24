@@ -5,6 +5,7 @@ import { PNG } from 'pngjs';
 import type { Plugin } from 'vite';
 import { localRequest } from './agent-bridge';
 import { inspectImagePreflight } from './image-preflight';
+import { removeConnectedLightBackground } from './background-removal';
 
 const MAX_BYTES = 24 * 1024 * 1024;
 const MAX_PIXELS = 16_000_000;
@@ -12,7 +13,8 @@ export function illustrationUpload(root: string): Plugin {
   return { name: 'studio-illustration-upload', apply: 'serve', configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
       const reply = (status: number, data: object) => { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); };
-      const pathname = new URL(req.url ?? '/', 'http://localhost').pathname;
+      const url = new URL(req.url ?? '/', 'http://localhost');
+      const pathname = url.pathname;
       if (pathname !== '/__studio/illustrations' && !pathname.startsWith('/__studio/illustrations/')) return next();
       if (!localRequest(req, req.method !== 'GET')) return reply(403, { error: 'Local same-origin requests only.' });
       if (req.method === 'GET') {
@@ -43,14 +45,19 @@ export function illustrationUpload(root: string): Plugin {
         if (!width || !height || width > 8192 || height > 8192 || width * height > MAX_PIXELS) return reply(422, { error: 'Image exceeds the 16 megapixel / 8192 px processing limit.' });
         let decoded: PNG;
         try { decoded = PNG.sync.read(bytes, { checkCRC: true }); } catch { return reply(422, { error: 'PNG could not be decoded. Export it again as a static PNG.' }); }
+        const backgroundProcessed = url.searchParams.get('removeBackground') === 'true';
+        if (backgroundProcessed) decoded = removeConnectedLightBackground(decoded);
+        const processed = backgroundProcessed ? PNG.sync.write(decoded) : bytes;
+        if (processed.length > MAX_BYTES) return reply(413, { error: 'Processed PNG exceeds 24 MiB.' });
         const preflight = inspectImagePreflight(decoded);
         const realRoot = await realpath(root), base = join(realRoot, 'projects', '.uploads');
         await mkdir(base, { recursive: true, mode: 0o700 });
         if (!(await realpath(base)).startsWith(realRoot + sep)) return reply(403, { error: 'Upload directory must stay inside this repository.' });
         const id = randomUUID(), directory = join(base, id);
         await mkdir(directory, { mode: 0o700 });
-        await writeFile(join(directory, 'source.png'), bytes, { flag: 'wx', mode: 0o600 });
-        const upload = { id, source: `projects/.uploads/${id}/source.png`, projectName: `avatar-${id.slice(0, 8)}`, width, height, transparent: preflight.method === 'alpha', preflight, uploadedAt: new Date().toISOString() };
+        await writeFile(join(directory, 'original.png'), bytes, { flag: 'wx', mode: 0o600 });
+        await writeFile(join(directory, 'source.png'), processed, { flag: 'wx', mode: 0o600 });
+        const upload = { id, source: `projects/.uploads/${id}/source.png`, projectName: `avatar-${id.slice(0, 8)}`, width, height, backgroundProcessed, ...(backgroundProcessed ? { warning: 'Background removal is approximate; inspect light hair and clothing. Original preserved.' } : {}), transparent: preflight.method === 'alpha', preflight, uploadedAt: new Date().toISOString() };
         await writeFile(join(directory, 'upload.json'), JSON.stringify(upload, null, 2), { flag: 'wx', mode: 0o600 });
         reply(201, upload);
       } catch { reply(500, { error: 'Could not save the image locally. Check disk space and project permissions.' }); }

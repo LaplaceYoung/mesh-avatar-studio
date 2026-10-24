@@ -29,9 +29,9 @@ export function IllustrationCreator() {
   const receive = async (file: File) => {
     setBusy(true); setError(''); setUpload(undefined); setConsent(false);
     try {
-      const response = await fetch('/__studio/illustrations', { method: 'POST', headers: { 'Content-Type': 'image/png', 'X-Studio-Request': '1' }, body: file });
+      const response = await fetch(`/__studio/illustrations?removeBackground=${removeBackground}`, { method: 'POST', headers: { 'Content-Type': 'image/png', 'X-Studio-Request': '1' }, body: file });
       const data = await response.json(); if (!response.ok) throw new Error(data.error);
-      setUpload(data); setName(data.projectName); setSubmitted(false); setSubmittedProject(''); setActivity(undefined); setPreview(URL.createObjectURL(file));
+      setUpload(data); setName(data.projectName); setSubmitted(false); setSubmittedProject(''); setActivity(undefined); setPreview(`/__studio/illustrations/${data.id}`);
     } catch (reason) { setError(String(reason)); } finally { setBusy(false); }
   };
   const generate = async () => {

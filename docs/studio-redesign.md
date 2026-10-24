@@ -373,3 +373,15 @@ perform local background separation with edge inspection before rigging, or
 report the limitation. Never claim the warning or manifest checks fix it.
 Inspect tilt-left/right on a contrasting background before visual approval.
 The reviewed private source and derived images were not changed or committed.
+
+## Local upload background processing
+
+The existing connected-light-background option now applies to PNG uploads as
+well as Mosi generation. Upload POST accepts optional `removeBackground=true`;
+without it the source bytes remain unchanged. Each upload retains original.png,
+and the creator previews the saved source rather than the original browser File.
+Both paths share background-removal.ts. This is opt-in, local flood-fill, not
+semantic segmentation; light hair/clothes touching the border may be damaged.
+Direct local HTTP verification with a synthetic white-border/dark-center PNG
+confirmed both option states, exact original-byte preservation, transparent
+corners only when enabled, and unchanged opaque center. No E2E was run.

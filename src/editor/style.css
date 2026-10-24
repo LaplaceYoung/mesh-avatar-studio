@@ -136,6 +136,8 @@ main:has(.project-location):has(.stale) .editor-panel { height: calc(100dvh - 21
 .lip-options { display: flex; gap: 10px; align-items: center; margin-top: 8px; font-size: 12px; }
 .lip-speed { display: flex; align-items: center; gap: 6px; flex: 1; }
 .lip-speed input { min-width: 0; width: 60px; flex: 1; accent-color: var(--accent); }
+.lip-language { display: flex; align-items: center; gap: 6px; }
+.lip-language select { padding: 4px 20px 4px 8px; font-size: 12px; border: 1px solid var(--line); border-radius: 4px; background: var(--surface); color: var(--ink); max-width: 100%; }
 .lip-help { font-size: 11px; color: var(--muted); margin: 6px 0 0; }
 .lip-skipped { font-size: 11px; color: #7c4b05; margin: 4px 0 0; }
 .inspector { min-height: 160px; max-height: 400px; overflow: auto; padding: 16px; }

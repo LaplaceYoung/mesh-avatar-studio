@@ -39,9 +39,8 @@ const FINAL_SHAPE = {
   v: ['v', null], ve: ['e', 'v'], van: ['e', 'v'], vn: ['v', 'v'],
 };
 
-// Extra vowel shapes that kana.js does not know — mapped onto its open/form space.
-VOWELS.v = { open: 0.4, form: 1.0, label: 'ü' };  // rounded /y/, beyond u
-VOWELS.r = { open: 0.35, form: 0.5, label: 'er' };
+// VOWELS already carries the v (ü) and r (er) shapes that kana.js exposes; see kana.js.
+void VOWELS;
 
 export function skippedPinyinCharacters(text) {
   const out = [];

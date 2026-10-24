@@ -9,6 +9,9 @@ export const VOWELS = {
   e: { open: 0.62, form: -0.4, label: 'え' },
   o: { open: 0.75, form: 0.6, label: 'お' },
   n: { open: 0, form: null, label: 'ん' },   // closes with the previous shape
+  // Pinyin extras: rounded /y/ (ü) and the retroflex schwa of 儿 (er); Japanese never emits these.
+  v: { open: 0.4, form: 1.0, label: 'ü' },
+  r: { open: 0.35, form: 0.5, label: 'er' },
 };
 
 const ROWS = {

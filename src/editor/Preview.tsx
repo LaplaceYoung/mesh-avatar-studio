@@ -18,10 +18,20 @@ const sliders = [
   { id: 'mouthOpen', label: 'mouthOpen', min: 0, max: 1, def: 0 },
   { id: 'bodyAngleZ', label: 'bodyTilt', min: -10, max: 10, def: 0 },
 ] as const;
-type Vowel = 'a' | 'i' | 'u' | 'e' | 'o' | 'n';
+type Vowel = 'a' | 'i' | 'u' | 'e' | 'o' | 'n' | 'v' | 'r';
 type LipLanguage = 'ja' | 'zh';
 type Lip = { kind: 'hold'; vowel: Vowel } | { kind: 'text'; lang: LipLanguage; text: string; speed: number; loop: boolean; source: 'user' | 'sample' } | null;
 const sampleText: Record<LipLanguage, string> = { ja: 'あいうえお、こんにちは', zh: '你好，我现在很好' };
+// Hold-mouth buttons follow the pronunciation set actually used by the selected language.
+const vowelGroups: Record<LipLanguage, { vowel: Vowel | 'v' | 'r'; label: string }[]> = {
+  ja: (['a', 'i', 'u', 'e', 'o', 'n'] as const).map(vowel => ({ vowel, label: VOWELS[vowel].label! })),
+  zh: [
+    ...(['a', 'o', 'e', 'i', 'u'] as Vowel[]).map(vowel => ({ vowel, label: vowel })),
+    { vowel: 'v', label: 'ü' },
+    { vowel: 'r', label: 'er' },
+    { vowel: 'n', label: 'n' },
+  ],
+};
 export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, hasMouthSprites, onDrawMouth }: { projectKey: string; rig: Rig; assets?: Record<string, string>; lipSync?: AudioSettings; onLipSyncChange(value: AudioSettings): void; hasMouthSprites: boolean; onDrawMouth?: () => void }) {
   const { t, language } = useI18n();
   const [lighting, setLighting] = useState(() => loadLighting(projectKey));
@@ -150,9 +160,6 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
       </div>
       <div className="lip-sync" id="lip-panel" role="tabpanel" aria-labelledby="lip-tab" hidden={tab !== 'lip'}>
         <div className="lip-text-row">
-          <select aria-label={t.lipLanguage} value={lipLanguage} data-testid="lip-language" onChange={event => { const next = event.target.value as LipLanguage; setLipLanguage(next); setText(sampleText[next]); setLip(null); }}>
-            <option value="ja">{t.lipLanguageJa}</option><option value="zh">{t.lipLanguageZh}</option>
-          </select>
           <input aria-label={t.lipText} value={text} data-testid="lip-text" onChange={event => setText(event.target.value)} />
           <button disabled={!text.trim()} onClick={() => setLip({ kind: 'text', lang: lipLanguage, text, speed, loop, source: 'user' })}>{t.lipPlay}</button>
           <button disabled={!lip} onClick={() => setLip(null)}>{t.lipStop}</button>
@@ -165,13 +172,17 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
           setLip({ kind: 'text', lang: lipLanguage, text: sampleText[lipLanguage], speed, loop: false, source: 'sample' });
         }} onPreview={active => { if (active) setLip(null); setAudioActive(active); }} />
         <div className="vowel-buttons" role="group" aria-label={t.lipSync}>
-          {(Object.keys(VOWELS) as Vowel[]).map(vowel => <button key={vowel} aria-pressed={lip?.kind === 'hold' && lip.vowel === vowel}
-            onClick={() => setLip(current => current?.kind === 'hold' && current.vowel === vowel ? null : { kind: 'hold', vowel })}>{VOWELS[vowel].label}</button>)}
+          {vowelGroups[lipLanguage].map(({ vowel, label }) => <button key={vowel} aria-pressed={lip?.kind === 'hold' && lip.vowel === vowel}
+            onClick={() => setLip(current => current?.kind === 'hold' && current.vowel === vowel ? null : { kind: 'hold', vowel: vowel as Vowel })}>{label}</button>)}
           <button onClick={() => setLip(null)}>{t.release}</button>
         </div>
         <div className="lip-options"><label className="lip-speed">{t.lipSpeed}<input type="range" min="4" max="12" step="1" value={speed} aria-label={t.lipSpeed}
           onChange={event => { const value = Number(event.target.value); setSpeed(value); setLip(current => current?.kind === 'text' ? { ...current, speed: value } : current); }} /><output>{speed}</output></label>
           <label><input type="checkbox" checked={loop} onChange={event => { const value = event.target.checked; setLoop(value); setLip(current => current?.kind === 'text' ? { ...current, loop: value } : current); }} />{t.lipLoop}</label>
+          <label className="lip-language">{t.lipLanguage}<select aria-label={t.lipLanguage} value={lipLanguage} data-testid="lip-language"
+            onChange={event => { const next = event.target.value as LipLanguage; setLipLanguage(next); setText(sampleText[next]); setLip(null); }}>
+            <option value="ja">{t.lipLanguageJa}</option><option value="zh">{t.lipLanguageZh}</option>
+          </select></label>
         </div>
         {!hasMouthSprites && <p className="mouth-fallback">{t.mouthFallback} {onDrawMouth && <button type="button" onClick={onDrawMouth}>{t.drawMouth}</button>}</p>}
         <p className="lip-help">{lipLanguage === 'zh' ? t.lipHelpZh : t.lipHelp}</p>{skipped && <p className="lip-skipped">{t.skippedKana} {skipped}</p>}

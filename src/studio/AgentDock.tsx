@@ -61,7 +61,13 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const clearProductionTurn = () => { productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); releaseLock(); };
   const releaseLock = () => { if (readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, ''); };
   const acquireLock = (projectName: string) => { const current = readLock(); if (current?.owner && current.owner !== TAB_ID && Number(current.expiresAt) > Date.now()) return false; savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName, expiresAt: Date.now() + LOCK_TTL })); return true; };
-  useEffect(() => { if (!productionTurn.current) return; const renew = () => { if (productionTurn.current && readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: productionProject.current, expiresAt: Date.now() + LOCK_TTL })); }; renew(); const timer = setInterval(renew, 30_000); return () => clearInterval(timer); }, [status]);
+  useEffect(() => {
+    if (!productionTurn.current && !pendingCreation) return;
+    const renew = () => {
+      if ((productionTurn.current || pendingCreation) && readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: productionProject.current || pendingCreation?.projectName, expiresAt: Date.now() + LOCK_TTL }));
+    };
+    renew(); const timer = setInterval(renew, 30_000); return () => clearInterval(timer);
+  }, [status, pendingCreation]);
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
   const start = async () => {
     setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);

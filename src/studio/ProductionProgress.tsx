@@ -74,7 +74,7 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
     };
     window.addEventListener('studio:production-activity', receive);
     return () => window.removeEventListener('studio:production-activity', receive);
-  }, [task?.projectName]);
+  }, [task?.projectName, task?.autoContinue]);
   if (!task) return null;
   const titles = zh ? { source: '原图', regions: '区域观察', draft: '绑定草稿', rig: '正式绑定', layers: '图层文件', review: '姿态审查图' } : { source: 'Source', regions: 'Regions', draft: 'Draft rig', rig: 'Final rig', layers: 'Layer files', review: 'Pose images' };
   const nextStage = status?.stages.find(stage => stage.state !== 'observed');

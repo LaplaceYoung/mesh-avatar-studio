@@ -49,6 +49,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const [config, setConfig] = useState<SessionConfigOption[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]), [permissions, setPermissions] = useState<Permission[]>([]);
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
+  const [foreignLock, setForeignLock] = useState<{ projectName?: string; expiresAt?: number }>();
   const socket = useRef<WebSocket | null>(null), sequence = useRef(0), streamId = useRef<string | null>(null);
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -60,7 +61,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   };
   const clearProductionTurn = () => { productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); releaseLock(); };
   const releaseLock = () => { if (readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, ''); };
-  const acquireLock = (projectName: string) => { const current = readLock(); if (current?.owner && current.owner !== TAB_ID && Number(current.expiresAt) > Date.now()) return false; savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName, expiresAt: Date.now() + LOCK_TTL })); return true; };
+  const acquireLock = (projectName: string) => { const current = readLock(); if (current?.owner && current.owner !== TAB_ID && Number(current.expiresAt) > Date.now()) { setForeignLock(current); return false; } savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName, expiresAt: Date.now() + LOCK_TTL })); setForeignLock(undefined); return true; };
   useEffect(() => {
     if (!productionTurn.current && !pendingCreation) return;
     const renew = () => {
@@ -70,8 +71,13 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   }, [status, pendingCreation]);
   useEffect(() => {
     const receive = (event: StorageEvent) => {
-      if (event.key !== LOCK_KEY || event.newValue) return;
-      if (pendingRef.current && !productionTurn.current) { pendingRef.current = undefined; setPendingCreation(undefined); setError(zh ? '其他标签页已释放制作租约，可以重新提交。' : 'Another tab released the production lease; you can submit again.'); }
+      if (event.key !== LOCK_KEY) return;
+      if (event.newValue) {
+        try { const lock = JSON.parse(event.newValue); if (lock.owner !== TAB_ID && Number(lock.expiresAt) > Date.now()) setForeignLock(lock); } catch { /* Ignore malformed cross-tab state. */ }
+      } else {
+        setForeignLock(undefined);
+        if (pendingRef.current && !productionTurn.current) { pendingRef.current = undefined; setPendingCreation(undefined); setError(zh ? '其他标签页已释放制作租约，可以重新提交。' : 'Another tab released the production lease; you can submit again.'); }
+      }
     };
     window.addEventListener('storage', receive);
     return () => window.removeEventListener('storage', receive);
@@ -189,6 +195,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       </Space></div>
     {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => { pendingRef.current = undefined; setPendingCreation(undefined); releaseLock(); }}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}
     {status === 'disconnected' && productionTurn.current && <Alert type="warning" title={zh ? '制作任务仍在原 ACP 会话中' : 'Production turn is still held by the original ACP session'} description={zh ? '请点击“重连”恢复现有会话；不要提交新的制作任务，避免重复写入项目。' : 'Click Reconnect to attach to the existing session. Do not submit another production task.'} />}
+    {foreignLock && <Alert type="warning" title={zh ? `其他标签页正在制作${foreignLock.projectName ? `：${foreignLock.projectName}` : ''}` : `Another tab is producing${foreignLock.projectName ? `: ${foreignLock.projectName}` : ''}`} description={zh ? `租约约 ${Math.max(1, Math.ceil((Number(foreignLock.expiresAt) - Date.now()) / 1000))} 秒后到期。` : `Lease expires in about ${Math.max(1, Math.ceil((Number(foreignLock.expiresAt) - Date.now()) / 1000))} seconds.`} />}
     {error && <Alert type="error" title={error} closable onClose={() => setError('')} />}
     {session && <Collapse ghost className="agent-configuration" items={[{ key: 'configuration', label: zh ? '模型与推理配置' : 'Model and reasoning settings', children: config.length ? <div className="agent-config-fields">{config.map(option => {
       const editable = ['model', 'model_config', 'thought_level'].includes(option.category ?? '');

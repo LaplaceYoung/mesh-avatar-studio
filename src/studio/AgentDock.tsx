@@ -56,11 +56,11 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnects = useRef(0);
   useEffect(() => { window.dispatchEvent(new CustomEvent('studio:agent-status', { detail: status })); }, [status]);
-  const emitActivity = (state: ProductionActivity['state'], message?: string) => {
-    if (!productionProject.current) return;
-    window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName: productionProject.current, state, message, at: new Date().toISOString() } }));
+  const emitActivity = (state: ProductionActivity['state'], message?: string, projectName = productionProject.current) => {
+    if (!projectName) return;
+    window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName, state, message, at: new Date().toISOString() } }));
   };
-  const clearProductionTurn = () => { productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); releaseLock(); };
+  const clearProductionTurn = () => { const projectName = productionProject.current; productionTurn.current = false; productionProject.current = ''; savePreference(TURN_KEY, ''); releaseLock(); return projectName; };
   const releaseLock = () => { if (readLock()?.owner === TAB_ID) savePreference(LOCK_KEY, ''); };
   const acquireLock = (projectName: string) => { const current = readLock(); if (current?.owner && current.owner !== TAB_ID && Number(current.expiresAt) > Date.now()) { setForeignLock(current); return false; } savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName, expiresAt: Date.now() + LOCK_TTL })); setForeignLock(undefined); return true; };
   useEffect(() => {
@@ -104,9 +104,9 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   useEffect(() => {
     const receive = (event: globalThis.Event) => {
       const value = (event as CustomEvent<{ prompt: string; projectName: string; source: string }>).detail;
-      if (!value || typeof value.prompt !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.projectName)) return;
-      if (pendingRef.current || productionTurn.current || status === 'working' || status === 'starting') { setError(zh ? '已有制作任务正在执行，请等待完成或失败后再提交新的任务。' : 'A production task is already running. Wait for it to complete or fail before submitting another.'); return; }
-      if (!acquireLock(value.projectName)) { setError(zh ? '另一个标签页正在制作，请等待完成或关闭后再试。' : 'Another tab is already running production. Wait for it to finish or close it before retrying.'); return; }
+      if (!value || typeof value.prompt !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.projectName)) { event.preventDefault(); return; }
+      if (pendingRef.current || productionTurn.current || status === 'working' || status === 'starting') { event.preventDefault(); setError(zh ? '已有制作任务正在执行，请等待完成或失败后再提交新的任务。' : 'A production task is already running. Wait for it to complete or fail before submitting another.'); return; }
+      if (!acquireLock(value.projectName)) { event.preventDefault(); setError(zh ? '另一个标签页正在制作，请等待完成或关闭后再试。' : 'Another tab is already running production. Wait for it to finish or close it before retrying.'); return; }
       pendingRef.current = value; setPendingCreation(value);
       productionProject.current = value.projectName;
       emitActivity('starting', zh ? '已确认制作任务，正在连接 ACP。' : 'Production task confirmed; connecting ACP.');
@@ -137,15 +137,15 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (event.type === 'exit') {
         setStatus('exited');
         savePreference(SESSION_KEY, '');
-        if (productionTurn.current) { clearProductionTurn(); emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.'); }
+        if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.', projectName); }
       }
-      if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { clearProductionTurn(); emitActivity('failed', event.message ?? 'Agent error'); } setStatus(current => current === 'configuring' ? 'ready' : current); }
+      if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('failed', event.message ?? 'Agent error', projectName); } setStatus(current => current === 'configuring' ? 'ready' : current); }
       if (event.type === 'complete') {
         streamId.current = null; setStatus('ready');
         // ACP completion means the turn ended, not that visual approval exists.
         // Only inspect artifacts here. The socket callback can outlive the editor
         // state it captured; reloading that editor must remain an explicit action.
-        if (productionTurn.current) { clearProductionTurn(); emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.'); window.dispatchEvent(new Event('studio:production-refresh')); }
+        if (productionTurn.current) { const projectName = clearProductionTurn(); emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.', projectName); window.dispatchEvent(new Event('studio:production-refresh')); }
       }
       if (event.type === 'permission' && event.id && event.options) setPermissions(items => [...items.filter(p => p.id !== event.id), event as Permission]);
       if (event.type === 'permission_resolved') setPermissions(items => items.filter(p => p.id !== event.id));

@@ -3,7 +3,7 @@ import { Alert, Button, Drawer, Empty, Image, Select, Space, Tag } from 'antd';
 import type { ProductionStage } from '../shared/production';
 import { useI18n } from '../editor/i18n';
 
-export function RegionEvidenceReview({ project, stage, open, onClose }: { project: string; stage?: ProductionStage; open: boolean; onClose(): void }) {
+export function RegionEvidenceReview({ project, stage, open, onClose, focusRegion }: { project: string; stage?: ProductionStage; open: boolean; onClose(): void; focusRegion?: string }) {
   const { language } = useI18n(), zh = language === 'zh';
   const files = stage?.files.filter(file => /^work[\\/]vision-[a-f0-9]{12}[\\/][A-Za-z][A-Za-z0-9_-]{0,48}-(detail|grid)\.png$/.test(file) || /^work[\\/]vision-[a-f0-9]{12}[\\/]overview\.png$/.test(file)) ?? [];
   const overview = files.find(file => /[\\/]overview\.png$/.test(file));
@@ -15,11 +15,11 @@ export function RegionEvidenceReview({ project, stage, open, onClose }: { projec
   const [loadedFiles, setLoadedFiles] = useState<Record<string, boolean>>({});
   const [reviewBusy, setReviewBusy] = useState(false);
   useEffect(() => {
-    const firstRegion = regions[0] ?? '';
+    const firstRegion = focusRegion && regions.includes(focusRegion) ? focusRegion : regions[0] ?? '';
     const firstFiles = regionFiles(firstRegion);
     setSelectedRegion(firstRegion);
     setSelectedFile(firstFiles.find(file => file.endsWith('-grid.png')) ?? firstFiles[0] ?? overview ?? files[0] ?? '');
-  }, [overview, open, regions.join('|')]);
+  }, [focusRegion, overview, open, regions.join('|')]);
   useEffect(() => { setReviewed(stage?.reviewed ?? []); }, [stage?.reviewed]);
   useEffect(() => { setReviewedFiles(stage?.reviewedFiles ?? {}); }, [stage?.reviewedFiles]);
   useEffect(() => { setLoadedFiles({}); }, [selectedRegion, open]);
@@ -41,7 +41,7 @@ export function RegionEvidenceReview({ project, stage, open, onClose }: { projec
         <small className="muted">{zh ? '先看 overview，再检查眼睛和嘴部的 5 px 网格，以及发际、发束和肩部框。发现偏移后可直接交给 Agent 局部修正。' : 'Start with the overview, then inspect the 5 px eye and mouth grids plus hair and shoulder boxes. Send a targeted correction to the Agent when a box is off.'}</small>
         {regions.length > 0 && <Space wrap>{(['detail', 'grid'] as const).map(kind => <Button key={kind} loading={reviewBusy} disabled={!loaded(kind)} type={reviewedFiles[selectedRegion]?.includes(kind) ? 'primary' : 'default'} onClick={async () => { const region = selectedRegion || regions[0]; setReviewBusy(true); try { const response = await fetch(`/__studio/evidence-review?project=${encodeURIComponent(project)}`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Request': '1', Origin: location.origin }, body: JSON.stringify({ region, kind, reviewed: !reviewedFiles[region]?.includes(kind) }) }); const data = await response.json(); if (!response.ok) throw new Error(data.error); setReviewed(data.reviewed); setReviewedFiles(data.reviewedFiles); window.dispatchEvent(new Event('studio:production-refresh')); } finally { setReviewBusy(false); } }}>{reviewedFiles[selectedRegion]?.includes(kind) ? `✓ ${kind}` : loaded(kind) ? kind : `${kind} · ${zh ? '先打开' : 'Open first'}`}</Button>)}<small className="muted">{zh ? `${reviewed.length}/${regions.length} 个区域已完成 detail + grid 复核` : `${reviewed.length}/${regions.length} regions completed detail + grid review`}</small></Space>}
       </> : <Empty description={zh ? '尚无与当前原图匹配的区域证据。' : 'No evidence matches the current source image.'} />}
-      <Button onClick={() => window.dispatchEvent(new CustomEvent('studio:agent-start', { detail: { prompt: `请检查 projects/${project} 的区域证据。当前证据应来自 source.png 的精确 SHA-256；请先打开 work/vision-* 的 overview、眼睛和嘴部 grid，指出实际可见的坐标偏移，再只修正对应 regions.json 和绑定草稿。不要把文件存在当作视觉正确，也不要覆盖无关改动。`, projectName: project, source: `projects/${project}/source.png` } }))} disabled={!file}>{zh ? '交给 Agent 复核区域' : 'Ask Agent to review regions'}</Button>
+      <Button onClick={() => window.dispatchEvent(new CustomEvent('studio:agent-start', { detail: { prompt: `请只检查 projects/${project} 的区域 ${selectedRegion || '当前区域'}。当前证据应来自 source.png 的精确 SHA-256；先打开对应的 overview、detail 和 grid，指出实际可见的坐标偏移，再只修正该区域在 regions.json 和绑定草稿中的相关内容。不要把文件存在当作视觉正确，也不要覆盖其他区域或无关改动。`, projectName: project, source: `projects/${project}/source.png` } }))} disabled={!file}>{zh ? '交给 Agent 复核当前区域' : 'Ask Agent to review this region'}</Button>
     </div>
   </Drawer>;
 }

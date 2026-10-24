@@ -39,6 +39,14 @@ const FINAL_SHAPE = {
   v: ['v', null], ve: ['e', 'v'], van: ['e', 'v'], vn: ['v', 'v'],
 };
 
+// Normalize accidental tone marks so the documented toneless path also accepts
+// pasted pinyin such as "nǐ hǎo" without turning the marked vowels into gaps.
+const TONE_MARKS = new Map([
+  ...Object.entries({ ā: 'a', á: 'a', ǎ: 'a', à: 'a', ē: 'e', é: 'e', ě: 'e', è: 'e', ī: 'i', í: 'i', ǐ: 'i', ì: 'i', ō: 'o', ó: 'o', ǒ: 'o', ò: 'o', ū: 'u', ú: 'u', ǔ: 'u', ù: 'u', ǖ: 'v', ǘ: 'v', ǚ: 'v', ǜ: 'v', ü: 'v' }),
+  ...Object.entries({ Ā: 'a', Á: 'a', Ǎ: 'a', À: 'a', Ē: 'e', É: 'e', Ě: 'e', È: 'e', Ī: 'i', Í: 'i', Ǐ: 'i', Ì: 'i', Ō: 'o', Ó: 'o', Ǒ: 'o', Ò: 'o', Ū: 'u', Ú: 'u', Ǔ: 'u', Ù: 'u', Ǖ: 'v', Ǘ: 'v', Ǚ: 'v', Ǜ: 'v', Ü: 'v' }),
+]);
+const normalizeLatin = value => [...value].map(c => TONE_MARKS.get(c) ?? c).join('');
+
 // VOWELS already carries the v (ü) and r (er) shapes that kana.js exposes; see kana.js.
 void VOWELS;
 
@@ -47,7 +55,7 @@ export function skippedPinyinCharacters(text) {
   const map = pinyinMap();
   for (const c of text) {
     if (/\s|，。！？；：、“”‘’（）《》〈〉【】…—,.!?;:'"()\[\]<>-/.test(c)) continue;
-    if (/[a-zA-Z]/.test(c)) continue;     // pinyin syllables pass through
+    if (/[a-zA-Z]/.test(c) || TONE_MARKS.has(c)) continue; // pinyin syllables pass through
     if (/[0-9]/.test(c)) { out.push(c); continue; }
     if (!map.has(c) && !out.includes(c)) out.push(c);
   }
@@ -97,7 +105,7 @@ export function pinyinToMoras(text, mora = 0.14) {
       continue;
     }
     if (GAP.has(c)) { latin += ' '; continue; }
-    if (/[a-zA-Z]/.test(c)) { latin += c; continue; }
+    if (/[a-zA-Z]/.test(c) || TONE_MARKS.has(c)) { latin += normalizeLatin(c); continue; }
     flush();
     const p = map.get(c);
     if (p) pushSyllables(out, p, mora);

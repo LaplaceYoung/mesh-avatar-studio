@@ -31,7 +31,7 @@ const en = {
   pose: 'Pose test', reset: 'Reset', sweep: 'Sweep angles', stopSweep: 'Stop sweep',
   lipSync: 'Lip sync', release: 'Release', lipText: 'Text to preview', lipPlay: 'Play', lipStop: 'Stop',
   lipSpeed: 'Morae per second', lipLoop: 'Loop', skippedKana: 'Skipped characters:', lipHelp: 'Hiragana, katakana and spaces. Preview only; no audio.',
-  lipLanguage: 'Preview language', lipLanguageJa: 'Japanese (kana)', lipLanguageZh: 'Chinese (pinyin / Hanzi)', lipHelpZh: 'Type Hanzi or toneless pinyin. Tone marks are ignored; pauses come from Chinese punctuation and spaces.',
+  lipLanguage: 'Preview language', lipLanguageJa: 'Japanese (kana)', lipLanguageZh: 'Chinese (Hanzi / pinyin)', lipHelpZh: 'Type Hanzi or toneless pinyin. Pasted tone marks are normalized; pauses come from Chinese punctuation and spaces.',
   sweepTip: 'Swings the head through its full range to find tears',
   turn: 'Turn left/right', look: 'Look up/down', tilt: 'Tilt', eyeOpen: 'Eyes open', mouthOpen: 'Mouth open', bodyTilt: 'Body tilt',
   loading: 'Loading local assets…', updating: 'Updating preview…', ready: 'Engine ready', previewError: 'Preview could not load',

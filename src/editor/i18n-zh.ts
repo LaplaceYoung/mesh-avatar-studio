@@ -23,7 +23,7 @@ export const uiZh = {
   pose: '姿态测试', reset: '重置', sweep: '连续测试角度', stopSweep: '停止角度测试',
   lipSync: '嘴型测试', release: '松开嘴型', lipText: '预览文本', lipPlay: '播放', lipStop: '停止',
   lipSpeed: '每秒音拍数', lipLoop: '循环', skippedKana: '已跳过的字符：', lipHelp: '支持日语假名和空格（あ=a、い=i、う=u、え=e、お=o）。仅预览嘴型，不播放声音。',
-  lipLanguage: '预览语言', lipLanguageJa: '日语（假名）', lipLanguageZh: '中文（拼音／汉字）', lipHelpZh: '支持汉字或不带声调的拼音。声调不影响口型。中文逗号、句号、空格会产生停顿。',
+  lipLanguage: '预览语言', lipLanguageJa: '日语（假名）', lipLanguageZh: '中文（汉字／拼音）', lipHelpZh: '直接输入汉字，或输入无声调拼音；粘贴带声调拼音也会自动去掉声调。中文逗号、句号、空格会产生停顿。',
   sweepTip: '让头部在完整角度范围内转动，检查图层之间的缝隙或破损',
   turn: '左右转头', look: '抬头／低头', tilt: '头部倾斜', eyeOpen: '眼睛开合', mouthOpen: '嘴巴开合', bodyTilt: '身体倾斜',
   loading: '正在加载本地素材…', updating: '正在更新预览…', ready: '预览已就绪', previewError: '无法加载预览',

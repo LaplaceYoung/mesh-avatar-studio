@@ -11,7 +11,7 @@ function readSettings(): WindowSettings {
     const value = JSON.parse(readPreference(SETTINGS_KEY) ?? 'null');
     if (!value || typeof value !== 'object') return {};
     const position = value.position && Number.isFinite(value.position.x) && Number.isFinite(value.position.y) ? { x: value.position.x, y: value.position.y } : undefined;
-    const size = value.size && Number.isFinite(value.size.width) && Number.isFinite(value.size.height) ? { width: value.size.width, height: value.size.height } : undefined;
+    const size = value.size && Number.isFinite(value.size.width) && Number.isFinite(value.size.height) && value.size.width > 0 && value.size.height > 0 ? { width: value.size.width, height: value.size.height } : undefined;
     return { expanded: value.expanded === true, position, size };
   } catch { return {}; }
 }
@@ -34,25 +34,29 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
   }, [expanded, position, size]);
   useEffect(() => {
     const element = windowRef.current;
-    if (!element || expanded) return;
+    if (!element || expanded || !open) return;
     const observer = new ResizeObserver(() => {
       const rect = element.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) setSize({ width: Math.round(rect.width), height: Math.round(rect.height) });
+      if (innerWidth <= 600 || rect.width <= 0 || rect.height <= 0) return;
+      const next = { width: Math.round(rect.width), height: Math.round(rect.height) };
+      setSize(current => current?.width === next.width && current.height === next.height ? current : next);
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, [expanded, open]);
   useEffect(() => {
     const keepInViewport = () => {
-      if (!position || expanded) return;
-      const width = Math.min(size?.width ?? 620, Math.max(280, innerWidth - 16));
-      const height = Math.min(size?.height ?? 650, Math.max(240, innerHeight - 16));
+      if (!position || expanded || !open || innerWidth <= 600) return;
+      const rect = windowRef.current?.getBoundingClientRect();
+      if (!rect?.width || !rect.height) return;
+      const { width, height } = rect;
       const next = { x: Math.max(8, Math.min(Math.max(8, innerWidth - width - 8), position.x)), y: Math.max(8, Math.min(Math.max(8, innerHeight - height - 8), position.y)) };
       if (next.x !== position.x || next.y !== position.y) setPosition(next);
     };
+    keepInViewport();
     window.addEventListener('resize', keepInViewport);
     return () => window.removeEventListener('resize', keepInViewport);
-  }, [expanded, position, size]);
+  }, [expanded, open, position, size]);
   useEffect(() => {
     if (open) {
       titlebarRef.current?.focus();
@@ -88,7 +92,7 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
       style={style}>
       <header ref={titlebarRef} tabIndex={-1} className="agent-window-titlebar"
         onPointerDown={event => {
-          if (expanded || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
+          if (expanded || innerWidth <= 600 || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
           const rect = windowRef.current!.getBoundingClientRect();
           drag.current = { x: event.clientX, y: event.clientY, left: rect.left, top: rect.top };
           event.currentTarget.setPointerCapture(event.pointerId);

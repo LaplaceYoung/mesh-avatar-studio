@@ -58,7 +58,8 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
       titlebarRef.current?.focus();
       return;
     }
-    launcherRef.current?.focus();
+    // Do not steal focus from a project/help drawer that closed this window.
+    if (windowRef.current?.contains(document.activeElement)) launcherRef.current?.focus();
   }, [open]);
   useEffect(() => {
     if (!open) return;

@@ -168,6 +168,10 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   await stage('review', async result => {
     const metadata = await json('review/poses.json', result);
     if (!Array.isArray(metadata.files) || !metadata.files.length || metadata.files.length > 256 || metadata.files.some((name: unknown) => typeof name !== 'string' || !/^[A-Za-z0-9_-]+\.png$/.test(name))) throw new Error('Invalid review image list.');
+    const reviewFiles = new Set(metadata.files as string[]);
+    if (!reviewFiles.has('contact-sheet.png')) result.issues.push('Review contact-sheet.png is missing; render-poses must produce the full motion sheet.');
+    if (![...reviewFiles].some(name => /-eyes\.png$/.test(name))) result.issues.push('Eye crop evidence is missing; inspect a rendered eyes crop before visual signoff.');
+    if (![...reviewFiles].some(name => /-mouth\.png$/.test(name))) result.issues.push('Mouth crop evidence is missing; inspect a rendered mouth crop before visual signoff.');
     for (const file of metadata.files) await png(`review/${file}`, result);
     reviewModified = (await checkedFile('review/poses.json', 2 * 1024 * 1024)).modified;
     if (Math.max(rigModified, layersModified, source?.modified ?? 0) > reviewModified) result.issues.push('Review images are older than current inputs; render them again.');

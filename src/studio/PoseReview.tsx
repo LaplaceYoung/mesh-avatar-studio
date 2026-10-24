@@ -21,7 +21,7 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
       {files.length && file ? <>
         <Select aria-label={zh ? '审查图片' : 'Review image'} value={file} onChange={setSelected} options={files.map(value => ({ value, label: value.slice('review/'.length) }))} />
         <div className="review-image-stage"><Image src={`/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file.slice('review/'.length))}&revision=${revision}`} alt={`${project} / ${file}`} /></div>
-        <small className="muted">{zh ? '点击图片放大。检查闭眼残留、转头裂缝、嘴部拉伸、头发遮挡；生成图片不等于通过审查。' : 'Click to enlarge. Inspect blink residue, tears, mouth stretching and hair overlap. Rendering is not approval.'}</small>
+        <small className="muted">{zh ? '点击图片放大。必须同时检查 contact sheet、眼部裁剪和嘴部裁剪，再检查闭眼残留、转头裂缝、嘴部拉伸、头发遮挡；生成图片不等于通过审查。' : 'Inspect the contact sheet, eye crop and mouth crop as well as blink residue, tears, mouth stretching and hair overlap. Rendering is not approval.'}</small>
       </> : <Empty description={zh ? '尚无审查图片，请让 Agent 先运行 render-poses。' : 'Ask the agent to run render-poses first.'} />}
       <label>{zh ? '问题区域' : 'Affected region'}<Select value={area} onChange={setArea} options={Object.entries(areas).map(([value, label]) => ({ value, label }))} /></label>
       <Input.TextArea aria-label={zh ? '具体缺陷' : 'Observed defect'} value={issue} rows={4} placeholder={zh ? '例如：turn-left.png 中左眼角露出白色裂缝，闭眼图仍能看到虹膜。请描述你实际看见的问题。' : 'Describe the defect you can actually see, including the frame and location.'} onChange={event => { setIssue(event.target.value); savePreference(key, event.target.value); }} />

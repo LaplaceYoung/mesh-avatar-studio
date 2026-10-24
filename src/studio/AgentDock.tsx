@@ -50,6 +50,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const [entries, setEntries] = useState<Entry[]>([]), [permissions, setPermissions] = useState<Permission[]>([]);
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
   const [foreignLock, setForeignLock] = useState<{ projectName?: string; expiresAt?: number }>();
+  const [, setLockClock] = useState(0);
   const socket = useRef<WebSocket | null>(null), sequence = useRef(0), streamId = useRef<string | null>(null);
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -82,6 +83,11 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     window.addEventListener('storage', receive);
     return () => window.removeEventListener('storage', receive);
   }, [zh]);
+  useEffect(() => {
+    if (!foreignLock?.expiresAt) return;
+    const timer = setInterval(() => { setLockClock(value => value + 1); if (Number(foreignLock.expiresAt) <= Date.now()) setForeignLock(undefined); }, 1000);
+    return () => clearInterval(timer);
+  }, [foreignLock?.expiresAt]);
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
   const start = async () => {
     setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);

@@ -2,6 +2,7 @@ import { useRef, useState } from 'react';
 import { useI18n } from './i18n';
 import { archiveText } from './archive-i18n';
 import { Icon } from './Icon';
+import { Menu } from './Menu';
 
 export function ExportAvatar({ busy, available, writable, dirty, stale, onExport }: {
   busy: boolean; available: boolean; writable: boolean; dirty: boolean; stale: boolean;
@@ -9,18 +10,20 @@ export function ExportAvatar({ busy, available, writable, dirty, stale, onExport
 }) {
   const { language } = useI18n(), text = archiveText[language];
   const [includeSource, setIncludeSource] = useState(true);
-  const menu = useRef<HTMLDetailsElement>(null);
-  return <details ref={menu} className="archive-menu" data-testid="export-menu" onKeyDown={event => { if (event.key === 'Escape' && menu.current) menu.current.open = false; }}>
-    <summary>{text.exportTitle}<Icon name="chevron" /></summary>
+  const detailsRef = useRef<HTMLDetailsElement>(null);
+  return <Menu className="archive-menu" data-testid="export-menu"
+    summary={<>{text.exportTitle}<Icon name="chevron" /></>}
+    disabled={busy}
+    detailsRef={el => { detailsRef.current = el; }}>
     <div className="archive-options">
       <p>{text.savedHelp}</p>
       <label><input type="checkbox" checked={includeSource} disabled={busy} onChange={event => setIncludeSource(event.target.checked)} />{text.includeSource}</label>
       <p>{text.sourceHelp}</p><small>{text.noSourceHelp}</small>
       {(dirty || (writable && stale)) && <p>{writable ? stale ? text.rebuildHelp : text.saveHelp : text.originalHelp}</p>}
       {!available && <p>{text.exportUnavailable}</p>}
-      <button className="primary" disabled={busy || !available || (writable && stale)} onClick={() => { void onExport(includeSource).finally(() => { if (menu.current) menu.current.open = false; }).catch(() => undefined); }}>{busy ? text.busy : writable && dirty ? text.saveExport : text.exportButton}</button>
+      <button className="primary" disabled={busy || !available || (writable && stale)} onClick={() => { void onExport(includeSource).finally(() => { if (detailsRef.current) detailsRef.current.open = false; }).catch(() => undefined); }}>{busy ? text.busy : writable && dirty ? text.saveExport : text.exportButton}</button>
     </div>
-  </details>;
+  </Menu>;
 }
 
 export function ImportAvatar({ busy, available, onImport }: { busy: boolean; available: boolean; onImport: (file: File) => void }) {

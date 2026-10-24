@@ -18,6 +18,7 @@ import { FirstGuide, GuideSteps, Help } from './Guide';
 import { Icon } from './Icon';
 import { RecentProjects } from './RecentProjects';
 import { AskAgent } from './AskAgent';
+import { Menu } from './Menu';
 import { VariantsPanel } from './VariantsPanel';
 import { JobFeedback } from './JobFeedback';
 import { CopyButton } from './CopyButton';
@@ -397,9 +398,9 @@ function Workspace() {
           onChange={event => { void openFile(event.target.files?.[0]); event.target.value = ''; }} />
         <input ref={folderInput} type="file" multiple hidden aria-label={t.folderFiles} {...{ webkitdirectory: '' }}
           onChange={event => { void openFolder(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
-        <details ref={openMenu} className="open-menu" inert={busy} onToggle={event => {
-          if (event.currentTarget.open) void localProjects().then(setProjects);
-        }}><summary>{t.openProject}<Icon name="chevron" /></summary>
+        <Menu className="open-menu" disabled={busy} onOpen={() => { void localProjects().then(setProjects); }}
+          detailsRef={el => { openMenu.current = el; }}
+          summary={<>{t.openProject}<Icon name="chevron" /></>}>
           <div className="project-menu">{importControl}{recentControl}<p className="project-help">{t.projectHelp}</p>
             {projects && <div className="project-list" aria-label={t.localProjects}>
               {projects.length === 0 && <p>{t.noProjects}</p>}
@@ -411,7 +412,7 @@ function Workspace() {
             </div>}
             <button onClick={() => { void chooseFile(true); }}>{t.openFolder}</button><button disabled={playbackOnly} onClick={() => { void chooseFile(false); }}>{t.openRig}</button>
           </div>
-        </details>
+        </Menu>
         <ExportAvatar busy={busy || saving} available={!!rootPath || !!pickedFiles.current} writable={writable} dirty={dirty} stale={changed.length > 0} onExport={exportFile} />
         <button className="icon-button" aria-label={t.save} disabled={saving || busy || playbackOnly} title={`${t.save} · ⌘S`} onClick={() => { void save(); }}><Icon name="save" /></button>
         <span className="toolbar-divider" />

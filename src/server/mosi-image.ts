@@ -4,6 +4,7 @@ import { join, sep } from 'node:path';
 import { PNG } from 'pngjs';
 import type { Plugin } from 'vite';
 import { localRequest } from './agent-bridge';
+import { inspectImagePreflight } from './image-preflight';
 
 const MAX_BYTES = 24 * 1024 * 1024;
 const MAX_PIXELS = 16_000_000;
@@ -18,7 +19,7 @@ Background: perfectly flat solid white (#FFFFFF), without gradients, texture, ch
 The result must be useful as a source image to trace face, eyes, mouth, hair, accessories, hands, body and mesh regions in source-image pixel coordinates. Do not create a sheet, turnaround, multiple poses, cropped head, or text.`;
 export const LIVE2D_NEGATIVE_PROMPT = 'multiple characters, side profile, three-quarter extreme angle, cropped head, cropped shoulders, face covered, eyes covered, mouth covered, hand over face, prop over face, glasses crossing eyes, tangled hair over eyes, merged silhouette, complex background, gradient background, cast shadow, floor, scenery, text, logo, watermark, signature, collage, character sheet, turnaround, multiple poses, open mouth with unclear lips, asymmetrical eyes, low resolution, blur, noisy texture, photorealistic, transparent checkerboard';
 
-type Upload = { id: string; source: string; projectName: string; width: number; height: number; transparent: boolean; generated: true; model: string; prompt: string; backgroundProcessed: boolean; warning?: string };
+type Upload = { id: string; source: string; projectName: string; width: number; height: number; transparent: boolean; generated: true; model: string; prompt: string; backgroundProcessed: boolean; preflight: ReturnType<typeof inspectImagePreflight>; warning?: string };
 function reply(res: import('node:http').ServerResponse, status: number, data: object) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); }
 export function removeConnectedLightBackground(image: PNG) {
   const visited = new Uint8Array(image.width * image.height), queue = new Uint32Array(image.width * image.height);
@@ -44,8 +45,8 @@ function pngInfo(bytes: Buffer) {
   if (!width || !height || width > 8192 || height > 8192 || width * height > MAX_PIXELS) throw new Error('Generated image exceeds the local processing limit.');
   const image = PNG.sync.read(bytes, { checkCRC: true });
   if (!image.width || !image.height || image.width > 8192 || image.height > 8192 || image.width * image.height > MAX_PIXELS) throw new Error('Generated image exceeds the local processing limit.');
-  let transparent = 0; for (let i = 3; i < image.data.length; i += 4) if (image.data[i] < 255) transparent++;
-  return { width: image.width, height: image.height, transparent: transparent > 0 };
+  const preflight = inspectImagePreflight(image);
+  return { width: image.width, height: image.height, transparent: preflight.method === 'alpha', preflight };
 }
 export function mosiImagePlugin(root: string): Plugin {
   return { name: 'studio-mosi-image', apply: 'serve', configureServer(server) {
@@ -89,7 +90,7 @@ export function mosiImagePlugin(root: string): Plugin {
         const id = randomUUID(), directory = join(base, id); await mkdir(directory, { mode: 0o700 });
         await writeFile(join(directory, 'original.png'), original, { flag: 'wx', mode: 0o600 });
         await writeFile(join(directory, 'source.png'), bytes, { flag: 'wx', mode: 0o600 });
-        const upload: Upload = { id, source: `projects/.uploads/${id}/source.png`, projectName, ...info, generated: true, model: MODEL, prompt, backgroundProcessed, ...(backgroundProcessed ? { warning: 'Background removal is approximate. Inspect light hair, clothing edges and gaps before rigging. The unmodified original.png is preserved.' } : {}) };
+        const upload: Upload = { id, source: `projects/.uploads/${id}/source.png`, projectName, ...info, generated: true, model: MODEL, prompt, backgroundProcessed, ...(backgroundProcessed || info.preflight.warnings.length ? { warning: [...(backgroundProcessed ? ['Background removal is approximate. Inspect light hair, clothing edges and gaps before rigging. The unmodified original.png is preserved.'] : []), ...info.preflight.warnings].join(' ') } : {}) };
         await writeFile(join(directory, 'upload.json'), JSON.stringify(upload, null, 2), { flag: 'wx', mode: 0o600 });
         reply(res, 201, upload);
       } catch (error) { reply(res, 422, { error: error instanceof Error ? error.message : 'Generated image failed validation.' }); }

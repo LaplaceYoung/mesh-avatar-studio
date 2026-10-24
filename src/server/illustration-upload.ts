@@ -4,6 +4,7 @@ import { join, sep } from 'node:path';
 import { PNG } from 'pngjs';
 import type { Plugin } from 'vite';
 import { localRequest } from './agent-bridge';
+import { inspectImagePreflight } from './image-preflight';
 
 const MAX_BYTES = 24 * 1024 * 1024;
 const MAX_PIXELS = 16_000_000;
@@ -42,15 +43,14 @@ export function illustrationUpload(root: string): Plugin {
         if (!width || !height || width > 8192 || height > 8192 || width * height > MAX_PIXELS) return reply(422, { error: 'Image exceeds the 16 megapixel / 8192 px processing limit.' });
         let decoded: PNG;
         try { decoded = PNG.sync.read(bytes, { checkCRC: true }); } catch { return reply(422, { error: 'PNG could not be decoded. Export it again as a static PNG.' }); }
-        let transparentPixels = 0;
-        for (let index = 3; index < decoded.data.length; index += 4) if (decoded.data[index] < 255) transparentPixels++;
+        const preflight = inspectImagePreflight(decoded);
         const realRoot = await realpath(root), base = join(realRoot, 'projects', '.uploads');
         await mkdir(base, { recursive: true, mode: 0o700 });
         if (!(await realpath(base)).startsWith(realRoot + sep)) return reply(403, { error: 'Upload directory must stay inside this repository.' });
         const id = randomUUID(), directory = join(base, id);
         await mkdir(directory, { mode: 0o700 });
         await writeFile(join(directory, 'source.png'), bytes, { flag: 'wx', mode: 0o600 });
-        const upload = { id, source: `projects/.uploads/${id}/source.png`, projectName: `avatar-${id.slice(0, 8)}`, width, height, transparent: transparentPixels > 0, uploadedAt: new Date().toISOString() };
+        const upload = { id, source: `projects/.uploads/${id}/source.png`, projectName: `avatar-${id.slice(0, 8)}`, width, height, transparent: preflight.method === 'alpha', preflight, uploadedAt: new Date().toISOString() };
         await writeFile(join(directory, 'upload.json'), JSON.stringify(upload, null, 2), { flag: 'wx', mode: 0o600 });
         reply(201, upload);
       } catch { reply(500, { error: 'Could not save the image locally. Check disk space and project permissions.' }); }

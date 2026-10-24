@@ -264,3 +264,21 @@ The UI never auto-approves from Agent output, file existence or render success.
 This preserves the intended distinction between “the pipeline produced files”
 and “a human inspected the motion”. No E2E or unit suite was run; TypeScript and
 lint passed after the change.
+
+## Creation handoff and source preflight — 2026-10-25
+
+After a user confirms an uploaded or generated illustration, the Agent window
+now starts the explicitly selected ACP provider automatically when no session is
+active. The confirmed prompt remains in a one-shot pending queue and is sent only
+after ACP reports `ready`; reconnects cannot silently duplicate it. The user can
+still cancel the pending task, stop the session, and answer native permission
+requests explicitly. This removes the unnecessary second Connect click without
+granting a permission or selecting a provider on the user's behalf.
+
+PNG intake and Mosi output now run the same source preflight. It computes alpha
+coverage, a conservative estimated content box, edge-touch flags and border-color
+uniformity. These are pixel geometry/background heuristics, not face or anatomy
+recognition and not a quality score. They are shown before creation and included
+in the ACP task context so the Agent can decide whether to inspect framing,
+background and pale clothing before tracing regions. No source image is altered
+by this check.

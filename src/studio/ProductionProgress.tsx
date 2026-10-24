@@ -64,15 +64,9 @@ export function ProductionProgress() {
   const productionBusy = activity?.state === 'starting' || activity?.state === 'working';
   const resume = () => {
     if (!status || !nextStage) return;
-    const tasks: Record<typeof nextStage.id, string> = {
-      source: `先创建项目骨架：确认 ${task.source} 是当前上传的本地 PNG，运行 uv run tools/new-project.py ${task.source} ${task.projectName}；如果目标目录已存在，停止并报告，不要覆盖。创建后检查 source.png 与输入尺寸和 SHA-256 一致，再进入区域证据阶段。`,
-      regions: `先修复区域证据阶段：检查 projects/${task.projectName}/source.png 的当前 SHA-256 与现有 regions.json 是否一致；如果证据缺失、过期或区域数量不匹配，重新逐区查看原图并运行 uv run tools/vision-regions.py projects/${task.projectName} --regions projects/${task.projectName}/regions.json，确认每个 detail/grid/overview 和 manifest.json 都来自当前 source。完成后再继续，不要套用示例坐标。`,
-      draft: `继续绑定草稿阶段：读取当前 source.png、regions.json 及匹配的 work/vision-* 证据包，逐个用 source-coordinate grid 确认眼睛、嘴、发际、发束、肩部和饰品坐标，再完善 rig.draft.json 并运行 validate-rig 和 overlay。`,
-      rig: `继续正式绑定阶段：检查 rig.draft.json 的 overlay 和眼部放大图，修正所有越界或错误区域，运行 validate-rig 和 uv run --with numpy --with pillow --with opencv-python-headless tools/build-layers.py projects/${task.projectName} --rig rig.draft.json。`,
-      layers: `继续图层阶段：检查 source.png、rig.json 和 built/layers.json 的尺寸及眼球/头发蒙版，必要时重新运行 build-layers；不要把文件存在当作视觉通过。`,
-      review: `继续姿态审查阶段：运行 npm run render-poses -- projects/${task.projectName}，逐帧查看闭眼、半闭眼、张嘴、转头、抬头低头、倾斜和头发摆动；发现问题就回到对应绑定或图层阶段修复并重建。`,
-    };
-    const taskText = tasks[nextStage.id];
+    const taskText = nextStage.id === 'source'
+      ? `先创建项目骨架：确认 ${task.source} 是当前上传的本地 PNG，运行 uv run tools/new-project.py ${task.source} ${task.projectName}；如果目标目录已存在，停止并报告，不要覆盖。创建后检查 source.png 与输入尺寸和 SHA-256 一致，再进入区域证据阶段。`
+      : status.nextAction?.instruction ?? `请处理 ${titles[nextStage.id]} 阶段：检查当前项目文件和视觉证据，完成后运行对应校验。`;
     window.dispatchEvent(new CustomEvent('studio:agent-start', { detail: { prompt: `请恢复项目 projects/${task.projectName} 的制作，不要从头猜测，也不要覆盖已有有效文件。\n${taskText}\n最后报告实际执行的命令、文件和仍未通过的视觉问题。`, projectName: task.projectName, source: task.source } }));
   };
   return <div className="production-progress"><Collapse ghost defaultActiveKey={['production']} items={[{ key: 'production', label: <Space><strong>{zh ? '制作产物' : 'Production artifacts'}</strong><small>{task.projectName}</small></Space>, children: <>
@@ -83,6 +77,7 @@ export function ProductionProgress() {
       <span>{titles[stage.id]}</span><Tag color={stage.state === 'invalid' ? 'warning' : stage.state === 'observed' ? 'green' : undefined}>{stage.state === 'observed' ? zh ? '已生成' : 'Present' : stage.state === 'invalid' ? zh ? '需检查' : 'Check' : zh ? '未生成' : 'Missing'}</Tag>
       {stage.issues.length > 0 && <small>{stage.issues.join(' · ')}</small>}
     </div>)}</div>
+    {status?.nextAction && <Alert className="production-next-action" type="warning" showIcon message={zh ? `下一步：${titles[status.nextAction.stage]}` : `Next: ${titles[status.nextAction.stage]}`} description={<><span>{status.nextAction.reason}</span><br /><small>{status.nextAction.instruction}</small></>} />}
     <small className="muted">{status?.visualReview === 'approved' ? `${zh ? '用户已确认视觉审查：' : 'Visual review approved by user: '}${status.visualReviewAt ?? ''}` : zh ? '尚未确认视觉审查。' : 'Visual review not approved.'}</small>
     <small className="muted">{zh ? '检查磁盘文件和基础格式，不代表视觉审查通过。原图/绑定更新后需重新构建和审查。' : 'Checks files and basic formats, not visual quality. Rebuild/review after input changes.'}</small>
     <Space wrap><Button type="primary" disabled={!nextStage || productionBusy} onClick={resume}>{productionBusy ? zh ? '制作执行中…' : 'Production running…' : nextStage ? zh ? `继续：${titles[nextStage.id]}` : `Resume: ${titles[nextStage.id]}` : needsSignoff ? zh ? '等待人工视觉确认' : 'Awaiting visual sign-off' : zh ? '制作阶段已完成' : 'All stages complete'}</Button><Button disabled={!status?.stages.some(stage => stage.id === 'regions' && stage.files.some(file => file.includes('overview.png')))} onClick={() => setEvidenceOpen(true)}>{zh ? '查看区域证据' : 'View region evidence'}</Button><Button onClick={() => setReviewOpen(true)}>{zh ? '查看姿态 / 反馈缺陷' : 'Review poses / report defects'}</Button><Button loading={signoffBusy} disabled={!status || status.visualReview === 'approved' || status.stages.find(stage => stage.id === 'review')?.state !== 'observed'} onClick={async () => { setSignoffBusy(true); try { const response = await fetch(`/__studio/production-signoff?project=${encodeURIComponent(task.projectName)}`, { method: 'POST', headers: { 'X-Studio-Request': '1', Origin: location.origin } }); if (!response.ok) throw new Error((await response.json()).error); const refreshed = await fetch(`/__studio/production-status?project=${encodeURIComponent(task.projectName)}`).then(response => response.json()); setStatus(refreshed); } catch (reason) { setError(String(reason)); } finally { setSignoffBusy(false); } }}>{status?.visualReview === 'approved' ? zh ? '已确认' : 'Approved' : zh ? '确认视觉审查通过' : 'Approve visual review'}</Button><Button disabled={!status?.previewAvailable} onClick={() => window.dispatchEvent(new CustomEvent('studio:open-generated-project', { detail: task.projectName }))}>{zh ? '打开生成的角色' : 'Open generated avatar'}</Button><Button type="text" onClick={() => setTask(undefined)}>{zh ? '隐藏进度' : 'Hide progress'}</Button></Space>

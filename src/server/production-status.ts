@@ -17,6 +17,17 @@ const regionAliases = {
   body: new Set(['body', 'shoulders', 'shoulders_body', 'chest']),
 };
 function hasRegion(names: Set<string>, required: Set<string>) { return [...required].some(name => names.has(name)); }
+function actionFor(stage: ProductionStage, name: string) {
+  const instruction: Record<ProductionStage['id'], string> = {
+    source: `使用创建任务提供的本地源图运行 uv run tools/new-project.py <source.png> ${name}，确认 source.png 与上传源图尺寸和 SHA-256 一致。`,
+    regions: `重新逐区查看 source.png，补齐核心区域后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
+    draft: `读取当前 regions.json 和匹配的 work/vision-* 证据包，完善 rig.draft.json，运行 validate-rig、overlay 和眼部放大叠加。`,
+    rig: `修正 rig.draft.json 后运行 validate-rig 和 build-layers，确认眼球层只含眼白/虹膜、头发蒙版不含脸和衣服。`,
+    layers: `检查 source.png、rig.json、built/layers.json 和关键 PNG 尺寸，必要时重新运行 build-layers。`,
+    review: `运行 npm run render-poses -- projects/${name}，逐帧检查闭眼、张嘴、转头、倾斜和头发摆动。`,
+  };
+  return { stage: stage.id, reason: stage.issues[0] ?? (stage.state === 'missing' ? 'Required artifacts are missing.' : 'Artifact requires inspection.'), instruction: instruction[stage.id] };
+}
 export async function inspectProduction(root: string, name: string): Promise<ProductionStatus> {
   if (!safeName.test(name)) throw new Error('Invalid project name.');
   const repository = await realpath(root), project = join(repository, 'projects', name);
@@ -140,9 +151,11 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const signoff = JSON.parse(await readFile(join(project, 'review', 'visual-signoff.json'), 'utf8')) as { reviewModified?: number; approvedAt?: string };
     if (signoff.reviewModified === reviewModified && typeof signoff.approvedAt === 'string' && !stages.find(stage => stage.state === 'invalid')) signoffAt = signoff.approvedAt;
   } catch { /* A missing or stale signoff stays unverified. */ }
+  const firstIncomplete = stages.find(stage => stage.state !== 'observed');
+  const nextAction = firstIncomplete ? actionFor(firstIncomplete, name) : undefined;
   return { project: name, projectExists, checkedAt: new Date().toISOString(), stages,
     previewAvailable: ['source', 'rig', 'layers'].every(id => stages.some(stage => stage.id === id && stage.state === 'observed')),
-    visualReview: signoffAt ? 'approved' : 'unverified', ...(signoffAt ? { visualReviewAt: signoffAt } : {}) };
+    visualReview: signoffAt ? 'approved' : 'unverified', ...(signoffAt ? { visualReviewAt: signoffAt } : {}), ...(nextAction ? { nextAction } : {}) };
 }
 export function productionStatusPlugin(root: string): Plugin {
   return { name: 'studio-production-status', apply: 'serve', configureServer(server) {

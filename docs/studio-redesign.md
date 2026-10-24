@@ -306,3 +306,13 @@ Resume. The currently mounted ACP session and pending request own the busy flag.
 An explicit process exit releases the production-turn flag; a socket disconnect
 alone does not prove the agent process stopped. Cross-tab task locking and session
 recovery after a full page reload are not yet guaranteed by this client-side flag.
+
+## Eye ROI calibration evidence
+
+After the skin-fill fix, the private `mosi-live2d-demo` was rebuilt and rendered
+through 21 poses. A conservative 8 px reduction on the image-right eye ROI outer
+edge removed the visible gray corner in the closed-eye crop while keeping the lash
+line intact. The rig validator passed and no new pose tear was visible. The
+project and generated review images remain ignored local evidence; they are not
+committed. A small residual risk remains at the right outer eyelid boundary when
+hair or shadow touches the eye ROI.

@@ -8,6 +8,15 @@ import type { ProductionStage, ProductionStatus } from '../shared/production';
 
 const safeName = /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/;
 const signature = Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]);
+const regionAliases = {
+  head: new Set(['head']),
+  leftEye: new Set(['left_eye', 'eye_left', 'eye0', 'eye_a']),
+  rightEye: new Set(['right_eye', 'eye_right', 'eye1', 'eye_b']),
+  mouth: new Set(['mouth']),
+  hair: new Set(['hair', 'hairline', 'bangs', 'bang_locks']),
+  body: new Set(['body', 'shoulders', 'shoulders_body', 'chest']),
+};
+function hasRegion(names: Set<string>, required: Set<string>) { return [...required].some(name => names.has(name)); }
 export async function inspectProduction(root: string, name: string): Promise<ProductionStatus> {
   if (!safeName.test(name)) throw new Error('Invalid project name.');
   const repository = await realpath(root), project = join(repository, 'projects', name);
@@ -54,11 +63,21 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   await stage('regions', async result => {
     const regions: unknown = await json('regions.json', result);
     if (!Array.isArray(regions) || !regions.length || regions.length > 32) throw new Error('Expected 1–32 observed regions.');
+    const names = new Set<string>();
     for (const region of regions) {
       if (!region || typeof region !== 'object' || !Array.isArray(region.box) || region.box.length !== 4 || !region.box.every(Number.isInteger) || typeof region.observation !== 'string' || !region.observation.trim()) throw new Error('Region needs source coordinates and a visual observation.');
       const [x0, y0, x1, y1] = region.box;
       if (!source || !(0 <= x0 && x0 < x1 && x1 <= source.width && 0 <= y0 && y0 < y1 && y1 <= source.height)) throw new Error('Region lies outside the current source image.');
+      if (typeof region.name !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(region.name) || names.has(region.name)) throw new Error('Region names must be unique ASCII identifiers.');
+      if (typeof region.step !== 'number' || !Number.isInteger(region.step) || region.step < 1 || region.step > 200) throw new Error('Region step must be an integer from 1 to 200.');
+      if (region.confidence !== 'low' && region.confidence !== 'medium' && region.confidence !== 'high') throw new Error('Region confidence must be low, medium or high.');
+      names.add(region.name);
     }
+    const missing = Object.entries(regionAliases).filter(([, aliases]) => !hasRegion(names, aliases)).map(([key]) => key);
+    if (missing.length) throw new Error(`Missing core visual regions: ${missing.join(', ')}. Add observed source-coordinate regions before rigging.`);
+    const leftEye = [...regionAliases.leftEye].find(name => names.has(name)), rightEye = [...regionAliases.rightEye].find(name => names.has(name));
+    if (leftEye && regions.find(region => region.name === leftEye)?.step > 5) throw new Error('The image-left eye region must use a grid step of 5 px or finer.');
+    if (rightEye && regions.find(region => region.name === rightEye)?.step > 5) throw new Error('The image-right eye region must use a grid step of 5 px or finer.');
     const expectedHash = await sourceHash();
     const work = join(project, 'work');
     let evidence: string | undefined;
@@ -89,6 +108,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
       await png(`${evidenceFolder.replace(project + sep, '')}/${region.detail}`, result);
       await png(`${evidenceFolder.replace(project + sep, '')}/${region.grid}`, result);
     }
+    const lowConfidence = regions.filter(region => region.confidence === 'low').map(region => region.name);
+    if (lowConfidence.length) result.issues.push(`Low-confidence regions require visual review: ${lowConfidence.join(', ')}.`);
   });
   for (const id of ['draft', 'rig'] as const) await stage(id, async result => {
     const file = id === 'draft' ? 'rig.draft.json' : 'rig.json';

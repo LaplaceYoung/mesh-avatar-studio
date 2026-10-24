@@ -16,6 +16,7 @@ export function ProductionProgress() {
   const [signoffBusy, setSignoffBusy] = useState(false);
   useEffect(() => savePreference('studio-creation-task', JSON.stringify(task ?? null)), [task]);
   const [status, setStatus] = useState<ProductionStatus>();
+  const [refreshTick, setRefreshTick] = useState(0);
   const [activity, setActivity] = useState<ProductionActivity>();
   const [error, setError] = useState('');
   useEffect(() => {
@@ -43,9 +44,9 @@ export function ProductionProgress() {
       finally { if (!disposed) timer = setTimeout(inspect, 5000); }
     };
     void inspect(); return () => { disposed = true; controller.abort(); clearTimeout(timer); };
-  }, [task]);
+  }, [task, refreshTick]);
   useEffect(() => {
-    const refresh = () => { setStatus(undefined); };
+    const refresh = () => { setStatus(undefined); setRefreshTick(value => value + 1); };
     window.addEventListener('studio:production-refresh', refresh);
     return () => window.removeEventListener('studio:production-refresh', refresh);
   }, []);

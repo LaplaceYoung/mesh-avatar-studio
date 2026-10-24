@@ -210,6 +210,7 @@ export function productionStatusPlugin(root: string): Plugin {
           const result = await inspectProduction(root, name);
           const stage = result.stages.find(item => item.id === 'regions');
           if (!stage?.required?.includes(input.region)) return reply(404, { error: 'Region is not part of the current evidence manifest.' });
+          if (!stage.files.some(file => file.endsWith(`/${input.region}-${input.kind}.png`))) return reply(404, { error: 'This evidence type is not listed for the selected region.' });
           const repository = await realpath(root), project = join(repository, 'projects', name), source = await readFile(join(project, 'source.png'));
           const sourceSha256 = createHash('sha256').update(source).digest('hex');
           const manifest = stage.files.find(file => file.startsWith('work/') && file.endsWith('/manifest.json'));

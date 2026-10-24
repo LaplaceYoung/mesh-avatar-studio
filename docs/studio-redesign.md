@@ -325,3 +325,11 @@ replays a production turn. A successful `session/new`/attach restores the
 conversation and permission boundary; an expired capability clears local state
 and requires an explicit reconnect. Historical production activity remains
 informational and never creates a busy lock by itself.
+
+## Bounded ACP reconnect
+
+While a production turn is active, a lost browser WebSocket now retries attachment
+up to three times with increasing short delays. The retry only sends `attach` for
+the existing capability; it never replays the production prompt. After the limit,
+the dock asks the user to reconnect manually. A provider process exit or expired
+capability remains terminal and clears the session rather than retrying forever.

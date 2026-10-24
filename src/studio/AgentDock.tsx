@@ -38,6 +38,8 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
   const socket = useRef<WebSocket | null>(null), sequence = useRef(0), streamId = useRef<string | null>(null);
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
+  const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const reconnects = useRef(0);
   useEffect(() => { window.dispatchEvent(new CustomEvent('studio:agent-status', { detail: status })); }, [status]);
   const emitActivity = (state: ProductionActivity['state'], message?: string) => {
     if (!productionProject.current) return;
@@ -126,15 +128,21 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (update.sessionUpdate === 'plan' && update.entries) setEntries(items => [...items.filter(item => item.id !== 'plan'), { id: 'plan', kind: 'plan', text: update.entries!.map(entry => `${entry.status} · ${entry.content}`).join('\n') }]);
     };
     const ws = new WebSocket(`${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}/__studio/agent-session`); socket.current = ws;
-    ws.onopen = () => ws.send(JSON.stringify({ type: 'attach', ...session }));
+    ws.onopen = () => { reconnects.current = 0; ws.send(JSON.stringify({ type: 'attach', ...session })); };
     ws.onmessage = event => { try { apply(JSON.parse(event.data)); } catch { setError('Invalid ACP event'); } };
     ws.onerror = () => setError(zh ? '连接失败；如果会话已过期，请重新连接 Agent。' : 'Connection failed; reconnect if the ACP session expired.');
     ws.onclose = event => {
       if (event.code === 1008) { savePreference(SESSION_KEY, ''); setSession(undefined); setStatus('idle'); setError(zh ? 'ACP 会话已过期，请重新连接。' : 'ACP session expired; reconnect to start a new session.'); return; }
       setStatus(current => current === 'exited' ? current : 'disconnected');
-      if (productionTurn.current) emitActivity('working', zh ? 'ACP 连接暂时断开；请点击重连，原制作任务仍保留。' : 'ACP connection lost; reconnect to resume the existing production turn.');
+      if (productionTurn.current) {
+        emitActivity('working', zh ? 'ACP 连接暂时断开，正在尝试恢复原制作任务。' : 'ACP connection lost; attempting to resume the existing production turn.');
+        if (reconnects.current < 3 && session) {
+          const delay = 1000 * (reconnects.current + 1); reconnects.current += 1; setStatus('starting');
+          reconnectTimer.current = setTimeout(() => setAttempt(value => value + 1), delay);
+        } else setError(zh ? '自动重连已达上限，请手动重连；不会重复提交制作任务。' : 'Automatic reconnect limit reached. Reconnect manually; the production prompt will not be duplicated.');
+      }
     };
-    return () => { ws.onclose = null; ws.close(); socket.current = null; };
+    return () => { ws.onclose = null; ws.close(); socket.current = null; if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; } };
   }, [session, attempt]);
   const send = (message: object) => { if (socket.current?.readyState === WebSocket.OPEN) { socket.current.send(JSON.stringify(message)); return true; } setError(zh ? '会话连接已断开，请重连。' : 'Session disconnected. Reconnect first.'); return false; };
   const active = status === 'ready' || status === 'working';

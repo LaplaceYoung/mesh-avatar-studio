@@ -28,6 +28,14 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const socket = useRef<WebSocket | null>(null), sequence = useRef(0), streamId = useRef<string | null>(null);
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
   useEffect(() => { void fetch('/__studio/agents').then(async response => { if (!response.ok) throw new Error('Agent bridge unavailable'); return response.json(); }).then(data => setProviders(data.providers)).catch(err => setError(String(err))); }, []);
+  const start = async () => {
+    setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);
+    try {
+      const response = await fetch('/__studio/agents', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Request': '1' }, body: JSON.stringify({ provider }) });
+      const data = await response.json(); if (!response.ok) throw new Error(data.error);
+      setSession(data);
+    } catch (err) { setStatus('idle'); setError(String(err)); }
+  };
   useEffect(() => {
     const receive = (event: globalThis.Event) => { const text = (event as CustomEvent<string>).detail; if (typeof text === 'string') setDraft(text); };
     window.addEventListener('studio:agent-prompt', receive); return () => window.removeEventListener('studio:agent-prompt', receive);
@@ -39,10 +47,13 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (pendingRef.current) { setError(zh ? '已有待发送制作任务，请先取消或完成连接。' : 'A creation task is already pending. Connect or cancel it first.'); return; }
       pendingRef.current = value; setPendingCreation(value);
       window.dispatchEvent(new CustomEvent('studio:creation-task', { detail: { projectName: value.projectName, source: value.source } }));
+      // A confirmed creation task owns the next connection. Starting ACP here
+      // removes an avoidable second click while keeping provider choice explicit.
+      if (!session && status === 'idle') void start();
     };
     window.addEventListener('studio:agent-start', receive);
     return () => window.removeEventListener('studio:agent-start', receive);
-  }, [zh]);
+  }, [session, status, zh, provider]);
   useEffect(() => {
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
@@ -93,14 +104,6 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     ws.onclose = () => setStatus(current => current === 'exited' ? current : 'disconnected');
     return () => { ws.onclose = null; ws.close(); socket.current = null; };
   }, [session, attempt]);
-  const start = async () => {
-    setError(''); setStatus('starting'); setEntries([]); setPermissions([]); setConfig([]);
-    try {
-      const response = await fetch('/__studio/agents', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Studio-Request': '1' }, body: JSON.stringify({ provider }) });
-      const data = await response.json(); if (!response.ok) throw new Error(data.error);
-      setSession(data);
-    } catch (err) { setStatus('idle'); setError(String(err)); }
-  };
   const send = (message: object) => { if (socket.current?.readyState === WebSocket.OPEN) { socket.current.send(JSON.stringify(message)); return true; } setError(zh ? '会话连接已断开，请重连。' : 'Session disconnected. Reconnect first.'); return false; };
   const active = status === 'ready' || status === 'working';
   const statusLabel: Record<string, string> = { idle: '未连接', starting: '正在初始化 ACP', ready: '就绪', working: '执行中', configuring: '更新配置中', disconnected: '已断开', exited: '已结束' };

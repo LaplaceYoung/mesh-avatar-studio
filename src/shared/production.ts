@@ -3,6 +3,8 @@ export type ProductionStage = {
   state: 'missing' | 'observed' | 'invalid';
   files: string[];
   issues: string[];
+  reviewed?: string[];
+  required?: string[];
 };
 export type ProductionNextAction = { stage: ProductionStage['id']; reason: string; instruction: string };
 export type ProductionStatus = { project: string; projectExists: boolean; checkedAt: string; stages: ProductionStage[]; previewAvailable: boolean; visualReview: 'unverified' | 'approved'; visualReviewAt?: string; nextAction?: ProductionNextAction };

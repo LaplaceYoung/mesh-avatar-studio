@@ -45,6 +45,11 @@ export function ProductionProgress() {
     void inspect(); return () => { disposed = true; controller.abort(); clearTimeout(timer); };
   }, [task]);
   useEffect(() => {
+    const refresh = () => { setStatus(undefined); };
+    window.addEventListener('studio:production-refresh', refresh);
+    return () => window.removeEventListener('studio:production-refresh', refresh);
+  }, []);
+  useEffect(() => {
     const receive = (event: Event) => {
       const detail = (event as CustomEvent<ProductionActivity>).detail;
       if (detail?.projectName === task?.projectName) {

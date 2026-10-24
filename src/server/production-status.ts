@@ -19,9 +19,12 @@ const regionAliases = {
 function hasRegion(names: Set<string>, required: Set<string>) { return [...required].some(name => names.has(name)); }
 function actionFor(stage: ProductionStage, name: string) {
   const lowConfidence = stage.issues.find(issue => issue.startsWith('Low-confidence regions require visual review:'));
+  const regionReview = stage.issues.find(issue => issue.startsWith('Region evidence requires visual review:'));
   const instruction: Record<ProductionStage['id'], string> = {
     source: `使用创建任务提供的本地源图运行 uv run tools/new-project.py <source.png> ${name}，确认 source.png 与上传源图尺寸和 SHA-256 一致。`,
-    regions: lowConfidence
+    regions: regionReview
+      ? `先在 Studio 的区域证据审查中逐一打开 overview、detail 和 grid，确认这些区域的实际坐标和边界：${regionReview.replace('Region evidence requires visual review: ', '')}。每检查一个区域，就在审查界面标记为已检查；不要只读取文件或把 confidence 改高。完成全部区域后，重新检查 production-status，再进入绑定。`
+      : lowConfidence
       ? `先打开并逐张检查当前 work/vision-* 的 overview、detail 和 grid，重点复核 ${lowConfidence.replace('Low-confidence regions require visual review: ', '')}。只有实际查看局部坐标后，才能修正 regions.json 的 box/observation/confidence；再运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并重新检查 overview/detail/grid。不要把 low confidence 直接改成 high。`
       : `重新逐区查看 source.png，补齐核心区域后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
     draft: `读取当前 regions.json 和匹配的 work/vision-* 证据包，完善 rig.draft.json，运行 validate-rig、overlay 和眼部放大叠加。`,
@@ -113,7 +116,18 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     if (!evidence) throw new Error('No evidence manifest matches the current source hash and regions. Run tools/vision-regions.py again.');
     const evidenceFolder = evidence.slice(0, evidence.length - `${sep}manifest.json`.length);
-    const manifest = JSON.parse(await readFile(evidence, 'utf8')) as { regions: { detail?: unknown; grid?: unknown }[] };
+    const manifest = JSON.parse(await readFile(evidence, 'utf8')) as { regions: { name?: unknown; detail?: unknown; grid?: unknown }[] };
+    const regionNames = regions.map(region => region.name as string);
+    result.required = regionNames;
+    const manifestRelative = evidence.replace(project + sep, '').replaceAll(sep, '/');
+    let reviewed = new Set<string>();
+    try {
+      const review = JSON.parse(await readFile(join(project, 'regions-review.json'), 'utf8')) as { sourceSha256?: unknown; manifest?: unknown; regions?: unknown };
+      if (review.sourceSha256 === expectedHash && review.manifest === manifestRelative && Array.isArray(review.regions)) reviewed = new Set(review.regions.filter((name: unknown): name is string => typeof name === 'string' && regionNames.includes(name)));
+    } catch { /* Missing or stale review keeps the region stage blocked. */ }
+    result.reviewed = [...reviewed];
+    const unreviewed = regionNames.filter(name => !reviewed.has(name));
+    if (unreviewed.length) result.issues.push(`Region evidence requires visual review: ${unreviewed.join(', ')}.`);
     result.files.push(evidence.replace(project + sep, ''));
     await png(`${evidenceFolder.replace(project + sep, '')}/overview.png`, result);
     for (const region of manifest.regions) {
@@ -164,7 +178,7 @@ export function productionStatusPlugin(root: string): Plugin {
   return { name: 'studio-production-status', apply: 'serve', configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      if (!['/__studio/production-status', '/__studio/review-image', '/__studio/evidence-image', '/__studio/production-signoff'].includes(url.pathname)) return next();
+      if (!['/__studio/production-status', '/__studio/review-image', '/__studio/evidence-image', '/__studio/evidence-review', '/__studio/production-signoff'].includes(url.pathname)) return next();
       const reply = (code: number, body: object) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
       if (!localRequest(req, req.method !== 'GET')) return reply(403, { error: 'Local same-origin requests only.' });
       const name = url.searchParams.get('project') ?? '';
@@ -179,6 +193,30 @@ export function productionStatusPlugin(root: string): Plugin {
           await writeFile(join(project, 'review', 'visual-signoff.json'), JSON.stringify({ version: 1, approvedAt: new Date().toISOString(), reviewModified: manifest.mtimeMs }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
           return reply(201, { approved: true });
         } catch { return reply(409, { error: 'Visual signoff already exists or could not be saved.' }); }
+      }
+      if (url.pathname === '/__studio/evidence-review') {
+        if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
+        try {
+          let body = ''; for await (const chunk of req) { body += chunk; if (body.length > 4096) return reply(413, { error: 'Review request is too large.' }); }
+          const input = JSON.parse(body) as { region?: unknown; reviewed?: unknown };
+          if (typeof input.region !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(input.region) || typeof input.reviewed !== 'boolean') return reply(400, { error: 'Provide a region name and reviewed boolean.' });
+          const result = await inspectProduction(root, name);
+          const stage = result.stages.find(item => item.id === 'regions');
+          if (!stage?.required?.includes(input.region)) return reply(404, { error: 'Region is not part of the current evidence manifest.' });
+          const repository = await realpath(root), project = join(repository, 'projects', name), source = await readFile(join(project, 'source.png'));
+          const sourceSha256 = createHash('sha256').update(source).digest('hex');
+          const manifest = stage.files.find(file => file.startsWith('work/') && file.endsWith('/manifest.json'));
+          if (!manifest) return reply(409, { error: 'Current evidence manifest is unavailable.' });
+          const reviewPath = join(project, 'regions-review.json');
+          let reviewed = new Set<string>();
+          try {
+            const previous = JSON.parse(await readFile(reviewPath, 'utf8')) as { sourceSha256?: unknown; manifest?: unknown; regions?: unknown };
+            if (previous.sourceSha256 === sourceSha256 && previous.manifest === manifest && Array.isArray(previous.regions)) reviewed = new Set(previous.regions.filter((value: unknown): value is string => typeof value === 'string'));
+          } catch { /* Start a new review for a new source or manifest. */ }
+          if (input.reviewed) reviewed.add(input.region); else reviewed.delete(input.region);
+          await writeFile(reviewPath, JSON.stringify({ version: 1, sourceSha256, manifest, regions: [...reviewed], updatedAt: new Date().toISOString() }, null, 2) + '\n', { mode: 0o600 });
+          return reply(200, { reviewed: [...reviewed] });
+        } catch (error) { return reply(422, { error: error instanceof Error ? error.message : 'Could not save region review.' }); }
       }
       if (req.method !== 'GET') return reply(405, { error: 'Use GET.' });
       if (url.pathname === '/__studio/review-image') {
@@ -208,7 +246,7 @@ export function productionStatusPlugin(root: string): Plugin {
           const allowed = regions?.files.map(file => file.replaceAll('\\', '/')).filter(file => file.startsWith('work/')) ?? [];
           if (!allowed.includes(requested) || !/^work\/vision-[a-f0-9]{12}\/[A-Za-z][A-Za-z0-9_-]{0,48}-(detail|grid)\.png$/.test(requested) && !/^work\/vision-[a-f0-9]{12}\/overview\.png$/.test(requested)) return reply(404, { error: 'Evidence image is not listed for the current source.' });
           const repository = await realpath(root), project = join(repository, 'projects', name), actual = await realpath(join(project, requested));
-          if (!actual.startsWith(project + sep)) return reply(403, { error: 'Evidence image must stay in this project.' });
+      if (!actual.startsWith(project + sep)) return reply(403, { error: 'Evidence image must stay in this project.' });
           const info = await stat(actual);
           if (!info.isFile() || info.size > 32 * 1024 * 1024) return reply(413, { error: 'Invalid evidence image size.' });
           const bytes = await readFile(actual);

@@ -16,7 +16,7 @@ function readSettings(): WindowSettings {
   } catch { return {}; }
 }
 
-export function AgentWindow({ open, onOpenChange, children }: { open: boolean; onOpenChange(open: boolean): void; children: ReactNode }) {
+export function AgentWindow({ open, onOpenChange, status, children }: { open: boolean; onOpenChange(open: boolean): void; status?: string; children: ReactNode }) {
   const { language } = useI18n();
   const zh = language === 'zh';
   const [settings] = useState(readSettings);
@@ -68,7 +68,7 @@ export function AgentWindow({ open, onOpenChange, children }: { open: boolean; o
             y: Math.max(8, Math.min(innerHeight - rect.height - 8, drag.current.top + event.clientY - drag.current.y)) });
         }}
         onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-        <Space><CodeOutlined /><strong>{zh ? '创作助手' : 'Creative assistant'}</strong></Space>
+        <Space><CodeOutlined /><strong>{zh ? '创作助手' : 'Creative assistant'}</strong>{status && <span className={`agent-window-status agent-window-status-${status}`}>{status}</span>}</Space>
         <Space size={2}>
           <Button type="text" size="small" icon={expanded ? <CompressOutlined /> : <ExpandOutlined />} aria-label={zh ? '切换窗口大小' : 'Toggle window size'} onClick={() => setExpanded(value => !value)} />
           <Button type="text" size="small" icon={<MinusOutlined />} aria-label={zh ? '收起 Agent 对话' : 'Minimize agent conversation'} onClick={() => onOpenChange(false)} />

@@ -19,6 +19,13 @@ export function ProductionProgress() {
   const [activity, setActivity] = useState<ProductionActivity>();
   const [error, setError] = useState('');
   useEffect(() => {
+    if (!task) return;
+    try {
+      const value = JSON.parse(readPreference(`studio-production-activity:${task.projectName}`) ?? 'null') as Partial<ProductionActivity> | null;
+      if (value && value.projectName === task.projectName && ['starting', 'working', 'completed', 'failed'].includes(String(value.state)) && typeof value.at === 'string') setActivity(value as ProductionActivity);
+    } catch { setActivity(undefined); }
+  }, [task?.projectName]);
+  useEffect(() => {
     const receive = (event: Event) => { const detail = (event as CustomEvent<CreationTask>).detail; if (detail && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(detail.projectName)) { setTask(detail); setStatus(undefined); } };
     window.addEventListener('studio:creation-task', receive);
     return () => window.removeEventListener('studio:creation-task', receive);
@@ -40,7 +47,10 @@ export function ProductionProgress() {
   useEffect(() => {
     const receive = (event: Event) => {
       const detail = (event as CustomEvent<ProductionActivity>).detail;
-      if (detail?.projectName === task?.projectName) setActivity(detail);
+      if (detail?.projectName === task?.projectName) {
+        setActivity(detail);
+        savePreference(`studio-production-activity:${detail.projectName}`, JSON.stringify(detail));
+      }
     };
     window.addEventListener('studio:production-activity', receive);
     return () => window.removeEventListener('studio:production-activity', receive);
@@ -66,7 +76,7 @@ export function ProductionProgress() {
   };
   return <div className="production-progress"><Collapse ghost defaultActiveKey={['production']} items={[{ key: 'production', label: <Space><strong>{zh ? '制作产物' : 'Production artifacts'}</strong><small>{task.projectName}</small></Space>, children: <>
     {error && <Alert type="warning" title={error} />}
-    {activity && <Alert className="production-activity" type={activity.state === 'failed' ? 'error' : activity.state === 'completed' ? 'success' : 'info'} showIcon title={activity.message ?? activity.state} />}
+    {activity && <Alert className="production-activity" type={activity.state === 'failed' ? 'error' : activity.state === 'completed' ? 'success' : 'info'} showIcon title={activity.message ?? activity.state} description={zh ? `上次 ACP 活动 · ${new Date(activity.at).toLocaleString()}` : `Last ACP activity · ${new Date(activity.at).toLocaleString()}`} />}
     {status && <Steps className="production-steps" size="small" responsive={false} current={activeIndex < 0 ? orderedStages.length : activeIndex} items={orderedStages.map(stage => ({ title: titles[stage.id], status: stage.state === 'invalid' ? 'error' : stage.state === 'observed' ? 'finish' : 'process' }))} />}
     <div className="production-stages">{status?.stages.map(stage => <div key={stage.id}>
       <span>{titles[stage.id]}</span><Tag color={stage.state === 'invalid' ? 'warning' : stage.state === 'observed' ? 'green' : undefined}>{stage.state === 'observed' ? zh ? '已生成' : 'Present' : stage.state === 'invalid' ? zh ? '需检查' : 'Check' : zh ? '未生成' : 'Missing'}</Tag>

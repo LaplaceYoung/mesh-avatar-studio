@@ -30,6 +30,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
   const socket = useRef<WebSocket | null>(null), sequence = useRef(0), streamId = useRef<string | null>(null);
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
+  useEffect(() => { window.dispatchEvent(new CustomEvent('studio:agent-status', { detail: status })); }, [status]);
   const emitActivity = (state: ProductionActivity['state'], message?: string) => {
     if (!productionProject.current) return;
     window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName: productionProject.current, state, message, at: new Date().toISOString() } }));

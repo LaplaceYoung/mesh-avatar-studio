@@ -1,76 +1,20 @@
-import { useEffect, useRef, type ReactNode } from 'react';
-
-// One open toolbar menu at a time. Menus built from <details><summary> are kept
-// for the disclosure styling, but the registry makes A close when B opens, adds
-// light dismiss and restores focus to the summary when the menu closes — the
-// behaviour keyboard and pointer users expect from menus per the ARIA APG
-// Menu Button pattern and Material 3 menu behavior.
-const openMenus = new Set<HTMLDetailsElement>();
-
-function closeOthers(active: HTMLDetailsElement) {
-  for (const menu of openMenus) if (menu !== active) menu.open = false;
+import { createContext, useContext, useId, useImperativeHandle, useState, type ReactNode, type Ref } from 'react';
+import { Button, Popover } from 'antd';
+const MenuContext = createContext<{ active: string | null; setActive(value: string | null): void } | null>(null);
+export function MenuScope({ children }: { children: ReactNode }) {
+  const [active, setActive] = useState<string | null>(null);
+  return <MenuContext.Provider value={{ active, setActive }}>{children}</MenuContext.Provider>;
 }
-
-function closeOnOutside(event: PointerEvent) {
-  const target = event.target as Node | null;
-  for (const menu of openMenus) if (target && !menu.contains(target)) menu.open = false;
-}
-
-function closeOnEscape(event: KeyboardEvent) {
-  if (event.key !== 'Escape') return;
-  for (const menu of openMenus) {
-    if (!menu.open) continue;
-    menu.open = false;
-    // APG: focus returns to the trigger that opened the menu.
-    const trigger = menu.querySelector('summary');
-    if (trigger instanceof HTMLElement) trigger.focus();
-  }
-  if (openMenus.size) event.stopPropagation();
-}
-
-let listenersAttached = 0;
-function attachListeners() {
-  if (!listenersAttached) {
-    document.addEventListener('pointerdown', closeOnOutside, true);
-    document.addEventListener('keydown', closeOnEscape, true);
-  }
-  listenersAttached++;
-}
-function detachListeners() {
-  if (!--listenersAttached) {
-    document.removeEventListener('pointerdown', closeOnOutside, true);
-    document.removeEventListener('keydown', closeOnEscape, true);
-  }
-}
-
-export type MenuProps = {
-  summary: ReactNode;
-  children: ReactNode;
-  className?: string;
-  disabled?: boolean;
-  onOpen?: () => void;
-  'data-testid'?: string;
-  detailsRef?: (el: HTMLDetailsElement | null) => void;
-};
-
-export function Menu({ summary, children, className, disabled, onOpen, detailsRef, ...rest }: MenuProps) {
-  const details = useRef<HTMLDetailsElement>(null);
-  useEffect(() => () => { const el = details.current; if (el && openMenus.delete(el)) detachListeners(); }, []);
-  return <details
-    ref={el => { details.current = el; detailsRef?.(el); }}
-    className={className} data-testid={rest['data-testid']}
-    onToggle={event => {
-      const el = event.currentTarget;
-      if (el.open) {
-        openMenus.add(el);
-        attachListeners();
-        closeOthers(el);
-        onOpen?.();
-      } else if (openMenus.delete(el)) {
-        detachListeners();
-      }
-    }}>
-    <summary aria-haspopup="menu" aria-disabled={disabled}>{summary}</summary>
-    {children}
-  </details>;
+export type MenuHandle = { open: boolean };
+export function Menu({ summary, children, className, disabled, onOpen, detailsRef, ...props }: {
+  summary: ReactNode; children: ReactNode; className?: string; disabled?: boolean; onOpen?(): void; detailsRef?: Ref<MenuHandle>; 'data-testid'?: string;
+}) {
+  const id = useId(), scope = useContext(MenuContext);
+  const [localOpen, setLocalOpen] = useState(false);
+  const open = scope ? scope.active === id : localOpen;
+  const setOpen = (next: boolean) => { if (scope) { if (next) scope.setActive(id); else if (scope.active === id) scope.setActive(null); } else setLocalOpen(next); };
+  useImperativeHandle(detailsRef, () => ({ get open() { return open; }, set open(value: boolean) { setOpen(value); } }));
+  return <Popover trigger="click" open={!disabled && open} onOpenChange={next => { setOpen(next); if (next) onOpen?.(); }} placement="bottomRight" content={<div className="studio-popover" onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); document.getElementById(id)?.focus(); } }}>{children}</div>}>
+    <Button id={id} disabled={disabled} className={className} data-testid={props['data-testid']} aria-expanded={!disabled && open} onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}>{summary}</Button>
+  </Popover>;
 }

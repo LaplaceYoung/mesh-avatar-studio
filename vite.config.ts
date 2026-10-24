@@ -1,5 +1,6 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+import { agentBridge } from './src/server/agent-bridge';
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { localProjectsPlugin } from './src/server/local-projects';
@@ -11,7 +12,7 @@ export default defineConfig({
     'mesh-avatar-element': fileURLToPath(new URL('./packages/element/src/index.ts', import.meta.url)),
   } },
   server: { host: '127.0.0.1' },
-  plugins: [react(), localProjectsPlugin(fileURLToPath(new URL('.', import.meta.url))), mediapipeAssets(fileURLToPath(new URL('.', import.meta.url))), liveRelay(fileURLToPath(new URL('.', import.meta.url))), {
+  plugins: [react(), agentBridge(fileURLToPath(new URL('.', import.meta.url))), localProjectsPlugin(fileURLToPath(new URL('.', import.meta.url))), mediapipeAssets(fileURLToPath(new URL('.', import.meta.url))), liveRelay(fileURLToPath(new URL('.', import.meta.url))), {
     name: 'sample-rig',
     resolveId(id) {
       if (id === 'virtual:sample-rig') return '\0sample-rig';

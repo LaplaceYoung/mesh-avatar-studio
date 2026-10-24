@@ -1,0 +1,82 @@
+import { expect, test } from '@playwright/test';
+
+test.beforeEach(async ({ page }) => {
+  await page.addInitScript(() => { localStorage.setItem('mesh-avatar-language', 'zh'); localStorage.setItem('mesh-avatar-guide-seen', '1'); });
+});
+test('complete workbench: theme, project library, edit history, Mandarin and variants', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  await expect(page.getByTestId('preview-status')).toHaveAttribute('data-state', 'ready');
+  await page.getByRole('button', { name: '切换深色模式' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  await page.getByRole('button', { name: '切换浅色模式' }).click();
+  await page.getByRole('button', { name: '打开项目', exact: true }).click();
+  await expect(page.getByRole('dialog')).toBeVisible();
+  await page.getByTestId('project-sample-miko-qipao').click();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await page.getByTestId('part-head').click();
+  const cx = page.getByRole('spinbutton', { name: 'head.cx', exact: true });
+  const original = await cx.inputValue();
+  await cx.fill(String(Number(original) + 10)); await cx.press('Tab');
+  await expect.poll(async () => Number(await cx.inputValue())).toBe(Number(original) + 10);
+  await page.getByRole('button', { name: '撤销', exact: true }).click();
+  await expect.poll(async () => Number(await cx.inputValue())).toBe(Number(original));
+  await page.getByRole('button', { name: '重做', exact: true }).click();
+  await expect.poll(async () => Number(await cx.inputValue())).toBe(Number(original) + 10);
+  await page.getByRole('tab', { name: '实时预览', exact: true }).click();
+  await page.getByRole('tab', { name: '嘴型测试', exact: true }).click();
+  await page.getByTestId('lip-language').click();
+  await page.getByRole('option', { name: '中文（拼音／汉字）' }).click();
+  await page.getByTestId('lip-text').fill('你好，我现在很好。');
+  await expect(page.getByRole('button', { name: 'ü', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'あ', exact: true })).toHaveCount(0);
+  await page.getByRole('button', { name: '播放', exact: true }).click();
+  await expect(page.getByRole('button', { name: '停止', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '停止', exact: true }).click();
+  await page.getByRole('tab', { name: '表情差分', exact: true }).click();
+  await expect(page.getByTestId('variants-panel')).toBeVisible();
+  await page.getByRole('checkbox', { name: '嘴型', exact: true }).check();
+  await page.getByRole('button', { name: 'Agent ↗', exact: true }).click();
+  await expect(page.locator('.agent-composer textarea')).not.toBeEmpty();
+  expect(errors).toEqual([]);
+});
+test('export popover closes on outside and Escape, project drawer takes focus', async ({ page }) => {
+  await page.goto('/');
+  const trigger = page.getByTestId('export-menu');
+  await trigger.click();
+  await expect(page.locator('.archive-options')).toBeVisible();
+  await page.getByRole('heading', { name: 'MESH STUDIO' }).click();
+  await expect(page.locator('.archive-options')).not.toBeVisible();
+  await trigger.click();
+  await page.getByRole('checkbox', { name: '包含原图' }).focus();
+  await page.keyboard.press('Escape');
+  await expect(trigger).toBeFocused();
+  await expect(page.locator('.archive-options')).not.toBeVisible();
+  await trigger.click(); await page.getByRole('button', { name: '打开项目', exact: true }).click();
+  await expect(page.locator('.archive-options')).not.toBeVisible();
+  await expect(page.getByRole('dialog')).toBeVisible();
+});
+test('Live controls, OBS URL and lighting remain available', async ({ page }) => {
+  const errors: string[] = []; page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/live.html?project=sample-miko-qipao');
+  await expect(page.getByTestId('live-avatar')).toHaveAttribute('data-state', 'ready');
+  await page.getByRole('tab', { name: '背景', exact: true }).click();
+  await expect(page.getByRole('textbox', { name: '复制OBS地址' })).toHaveValue(/stream.html/);
+  await page.getByRole('tab', { name: '表情', exact: true }).click();
+  await page.getByRole('button', { name: /微笑/ }).click();
+  await expect(page.getByRole('button', { name: /微笑/ })).toHaveAttribute('aria-pressed', 'true');
+  await page.getByRole('tab', { name: '光源与阴影' }).click();
+  await page.getByRole('checkbox', { name: '启用光照' }).check();
+  await expect(page.getByRole('slider', { name: '光源高度' })).toBeVisible();
+  expect(errors).toEqual([]);
+});
+test('narrow viewport fits without horizontal overflow', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await expect(page.getByTestId('preview-status')).toHaveAttribute('data-state', 'ready');
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+});
+test('agent bridge rejects cross-origin process creation', async ({ request }) => {
+  const response = await request.post('/__studio/agents', { headers: { Origin: 'https://example.com', 'X-Studio-Request': '1' }, data: { provider: 'claude' } });
+  expect(response.status()).toBe(403);
+});

@@ -1,3 +1,6 @@
+import { Input, Segmented, Tabs } from 'antd';
+import { ThemeToggle } from '../studio/Theme';
+import { ColorInput, Button, RangeInput, CheckInput, SelectInput } from '../studio/Controls';
 import { LightingControls, LightHandle, lightingText } from '../lighting/Controls';
 import { colorHex, LIVE_EXPRESSIONS, type LiveExpression, type MeshAvatar } from 'mesh-avatar';
 import { loadLighting, saveLighting } from '../lighting/storage';
@@ -9,13 +12,13 @@ import { viewSettings, streamUrl, backgroundColor } from './settings';
 import { FacePose, type TrackingOptions } from './tracking';
 import { CameraCapture, MicrophoneCapture, type CameraState, type MicState, type BackgroundTracking } from './media';
 import { liveText } from './i18n';
-import { Icon } from '../editor/Icon';
 import { createLiveSender, receiveExpression, receiveLightingPreset, sendLighting, watchDuplicateLivePages } from './relay';
 import { EXPRESSION_TOKEN_PATH, LIGHTING_PRESET_PATH } from './expression-protocol';
 
 export function LiveApp() {
   const { language, setLanguage } = useI18n(), t = liveText[language];
   const [settings, setSettings] = useState(() => { const view = viewSettings(location.search); return { ...view, lighting: view.lighting ?? loadLighting(view.project) }; });
+  const [activeTab, setActiveTab] = useState('capture');
   const [lightingOpen, setLightingOpen] = useState(false);
   const [presets, setPresets] = useState(() => loadLightingPresets(settings.project));
   const presetsRef = useRef(presets); presetsRef.current = presets;
@@ -125,71 +128,73 @@ export function LiveApp() {
   const url = streamUrl(settings, location.origin);
   const status = cameraState === 'running' ? tracking ? 'tracking' : 'lost' : cameraState;
   return <main className="live-app">
-    <header className="live-header"><div><a href="/">{t.back}</a><h1>Mesh Avatar Studio <span>{t.title}</span></h1></div>
-      <div className="live-languages">{(['en', 'ja', 'zh'] as const).map(lang => <button key={lang} aria-pressed={language === lang} onClick={() => setLanguage(lang)}>{({ en: 'English', ja: '日本語', zh: '简体中文' })[lang]}</button>)}</div>
-    </header>
+    <header className="studio-header"><div className="studio-brand"><span className="brand-mark">M</span><div><h1>MESH <span>LIVE</span></h1><small>{settings.project}</small></div></div><div className="studio-project-name" /><nav className="studio-actions"><Button href="/">{t.back}</Button><Segmented aria-label="Language" value={language} options={[{ value: 'zh', label: '中文' }, { value: 'en', label: 'EN' }, { value: 'ja', label: 'JA' }]} onChange={setLanguage} /><ThemeToggle /></nav></header>
     <div className="live-layout"><section className="live-view"><div className="live-preview checkerboard lighting-preview" style={{ backgroundColor: settings.background, backgroundImage: settings.background === 'transparent' ? undefined : 'none' }}>
       <canvas ref={canvas} data-testid="live-avatar" />
       {lightingOpen && <LightHandle value={settings.lighting} onChange={changeLighting} language={language} />}
     </div><p role="status" className={viewState === 'projectError' ? 'live-error' : ''}>{t[viewState]} · {settings.project}</p></section>
     <aside className="live-controls">
       {duplicatePage && <p role="alert" className="live-warning" data-testid="duplicate-live-page">{t.duplicatePage}</p>}
-      <section><h2>{t.camera}</h2><label>{t.device}<select aria-label={t.camera} value={cameraId} disabled={cameraActive} onChange={event => setCameraId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'videoinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.camera} ${i + 1}`}</option>)}</select></label>
-        <div className="live-buttons"><button className="live-primary" disabled={!cameraActive && viewState !== 'ready'} onClick={() => {
+      <Tabs activeKey={activeTab} onChange={key => { setActiveTab(key); setLightingOpen(key === 'lighting'); }} items={[
+        { key: 'capture', label: t.camera, forceRender: true, children: <>      <section><h2>{t.camera}</h2><label>{t.device}<SelectInput aria-label={t.camera} value={cameraId} disabled={cameraActive} onChange={event => setCameraId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'videoinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.camera} ${i + 1}`}</option>)}</SelectInput></label>
+        <div className="live-buttons"><Button type="primary" disabled={!cameraActive && viewState !== 'ready'} onClick={() => {
           setCalibrated(false); pose.current.reset();
           if (cameraActive) camera.current?.stop(); else void camera.current?.start(cameraId).then(refreshDevices);
-        }}>{cameraActive ? t.stop : t.start}</button><button disabled={!tracking} onClick={() => setCalibrated(pose.current.calibrate(performance.now()))}>{t.calibrate}</button></div>
+        }}>{cameraActive ? t.stop : t.start}</Button><Button disabled={!tracking} onClick={() => setCalibrated(pose.current.calibrate(performance.now()))}>{t.calibrate}</Button></div>
         <p role="status" data-testid="tracking-status" data-state={status}>{t[status]}</p>
         {backgroundStatus && <p role="alert" className="live-error" data-testid="background-status">{t[backgroundStatus]}</p>}
         <small>{calibrated ? t.calibrated : t.calibrateHint}</small>
-        <label className="live-check"><input type="checkbox" checked={options.mirror} onChange={event => setOptions(current => ({ ...current, mirror: event.target.checked }))} />{t.mirror}</label>
-        <label>{t.sensitivity}<input type="range" min="0.25" max="2" step="0.05" value={options.sensitivity} onChange={event => setOptions(current => ({ ...current, sensitivity: Number(event.target.value) }))} /></label>
-        <label>{t.smoothing}<input type="range" min="0" max="1" step="0.05" value={options.smoothing} onChange={event => setOptions(current => ({ ...current, smoothing: Number(event.target.value) }))} /></label>
-        <label className="live-check"><input type="checkbox" checked={showCamera} onChange={event => setShowCamera(event.target.checked)} />{t.cameraPreview}</label>
+        <label className="live-check"><CheckInput checked={options.mirror} onChange={event => setOptions(current => ({ ...current, mirror: event.target.checked }))} />{t.mirror}</label>
+        <label>{t.sensitivity}<RangeInput  min="0.25" max="2" step="0.05" value={options.sensitivity} onChange={event => setOptions(current => ({ ...current, sensitivity: Number(event.target.value) }))} /></label>
+        <label>{t.smoothing}<RangeInput  min="0" max="1" step="0.05" value={options.smoothing} onChange={event => setOptions(current => ({ ...current, smoothing: Number(event.target.value) }))} /></label>
+        <label className="live-check"><CheckInput checked={showCamera} onChange={event => setShowCamera(event.target.checked)} />{t.cameraPreview}</label>
         <video ref={video} autoPlay muted playsInline className={showCamera ? 'camera-preview' : 'camera-preview camera-hidden'} style={{ transform: options.mirror ? 'scaleX(-1)' : undefined }} aria-label={t.cameraPreview} />
       </section>
-      <section><h2>{t.microphone}</h2><label className="live-check"><input type="checkbox" checked={micActive} disabled={!micActive && viewState !== 'ready'} onChange={event => { if (event.target.checked) void microphone.current?.start(micId).then(refreshDevices); else microphone.current?.stop(); }} />{t.microphone}</label>
-        <select aria-label={t.microphone} value={micId} disabled={micActive} onChange={event => setMicId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'audioinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.microphone} ${i + 1}`}</option>)}</select>
-        <label>{t.gain}<input type="range" min="0.25" max="5" step="0.05" value={gain} onChange={event => setGain(Number(event.target.value))} /></label><small role="status">{t[micState]}</small>
+      <section><h2>{t.microphone}</h2><label className="live-check"><CheckInput checked={micActive} disabled={!micActive && viewState !== 'ready'} onChange={event => { if (event.target.checked) void microphone.current?.start(micId).then(refreshDevices); else microphone.current?.stop(); }} />{t.microphone}</label>
+        <SelectInput aria-label={t.microphone} value={micId} disabled={micActive} onChange={event => setMicId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'audioinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.microphone} ${i + 1}`}</option>)}</SelectInput>
+        <label>{t.gain}<RangeInput  min="0.25" max="5" step="0.05" value={gain} onChange={event => setGain(Number(event.target.value))} /></label><small role="status">{t[micState]}</small>
       </section>
-      <section><h2>{t.background}</h2><select aria-label={t.background} value={settings.background} onChange={event => setSettings(current => ({ ...current, background: backgroundColor(event.target.value) }))}>
+</> },
+        { key: 'output', label: t.background, children: <>      <section><h2>{t.background}</h2><SelectInput aria-label={t.background} value={settings.background} onChange={event => setSettings(current => ({ ...current, background: backgroundColor(event.target.value) }))}>
         <option value="transparent">{t.transparent}</option><option value="#00ff00">{t.green}</option><option value="#0000ff">{t.blue}</option>{!['transparent', '#00ff00', '#0000ff'].includes(settings.background) && <option value={settings.background}>{t.custom}</option>}
-      </select><small className="background-hint" data-testid="background-hint">{settings.background === 'transparent' ? t.bgHintTransparent : ['#00ff00', '#0000ff'].includes(settings.background) ? t.bgHintChroma : t.bgHintCustom}</small>
-        <label>{t.custom}<input type="color" value={settings.background === 'transparent' ? '#ffffff' : settings.background} onChange={event => setSettings(current => ({ ...current, background: event.target.value }))} /></label>
-        <label>{t.fit}<select value={settings.fit} onChange={event => setSettings(current => ({ ...current, fit: event.target.value as 'contain' | 'cover' }))}><option value="contain">{t.contain}</option><option value="cover">{t.cover}</option></select></label>
-        <div className="live-buttons"><button className="live-primary" onClick={() => { void navigator.clipboard.writeText(url).then(() => setCopyState('copied')).catch(() => setCopyState('copyError')); }}>{t.obs}</button>
+      </SelectInput><small className="background-hint" data-testid="background-hint">{settings.background === 'transparent' ? t.bgHintTransparent : ['#00ff00', '#0000ff'].includes(settings.background) ? t.bgHintChroma : t.bgHintCustom}</small>
+        <label>{t.custom}<ColorInput  value={settings.background === 'transparent' ? '#ffffff' : settings.background} onChange={event => setSettings(current => ({ ...current, background: event.target.value }))} /></label>
+        <label>{t.fit}<SelectInput value={settings.fit} onChange={event => setSettings(current => ({ ...current, fit: event.target.value as 'contain' | 'cover' }))}><option value="contain">{t.contain}</option><option value="cover">{t.cover}</option></SelectInput></label>
+        <div className="live-buttons"><Button type="primary" onClick={() => { void navigator.clipboard.writeText(url).then(() => setCopyState('copied')).catch(() => setCopyState('copyError')); }}>{t.obs}</Button>
         <a className="live-open" href={url} target="_blank" rel="noreferrer">{t.openStream}</a></div>
-        {copyState && <p role="status">{t[copyState]}</p>}<input className="obs-url" aria-label={t.obs} readOnly value={url} onFocus={event => event.target.select()} /><small>{t.obsHelp}</small>
+        {copyState && <p role="status">{t[copyState]}</p>}<Input className="obs-url" aria-label={t.obs} readOnly value={url} onFocus={event => event.target.select()} /><small>{t.obsHelp}</small>
       </section>
-      <details className="live-expression" data-testid="expression-section">
-        <summary><Icon name="face" />{t.expression}{expression !== 'neutral' && <span className="expression-on">{t[expression]}</span>}</summary>
+</> },
+        { key: 'expression', label: t.expression, children: <>      <section className="live-expression" data-testid="expression-section">
         <div className="live-expression-body"><div className="expression-buttons" role="group" aria-label={t.expression}>
-          {LIVE_EXPRESSIONS.map((name, i) => <button key={name} type="button" aria-pressed={expression === name} aria-keyshortcuts={String(i + 1)} onClick={() => setExpression(name)}><kbd>{i + 1}</kbd>{t[name]}</button>)}
+          {LIVE_EXPRESSIONS.map((name, i) => <Button key={name}  aria-pressed={expression === name} aria-keyshortcuts={String(i + 1)} onClick={() => setExpression(name)}><kbd>{i + 1}</kbd>{t[name]}</Button>)}
         </div><small>{t.expressionHint}</small>
         <h3>{t.remoteTitle}</h3><p className="remote-help">{t.remoteHelp}</p>
         {remote ? <>
-          <label>{t.remoteUrl}<span className="remote-field"><input readOnly value={remote.url} onFocus={event => event.target.select()} /><button type="button" onClick={() => copyRemote('url', remote.url)}>{remoteCopied === 'url' ? t.copiedShort : t.copy}</button></span></label>
-          <label>{t.remoteToken}<span className="remote-field"><input readOnly value={remote.token} onFocus={event => event.target.select()} /><button type="button" onClick={() => copyRemote('token', remote.token)}>{remoteCopied === 'token' ? t.copiedShort : t.copy}</button></span></label>
+          <label>{t.remoteUrl}<span className="remote-field"><Input readOnly value={remote.url} onFocus={event => event.target.select()} /><Button  onClick={() => copyRemote('url', remote.url)}>{remoteCopied === 'url' ? t.copiedShort : t.copy}</Button></span></label>
+          <label>{t.remoteToken}<span className="remote-field"><Input readOnly value={remote.token} onFocus={event => event.target.select()} /><Button  onClick={() => copyRemote('token', remote.token)}>{remoteCopied === 'token' ? t.copiedShort : t.copy}</Button></span></label>
           <small>{t.remoteNames}</small>
-          <div className="remote-actions"><button type="button" onClick={() => { void loadRemote('POST'); }}>{t.regenerate}</button><small>{t.regenerateHelp}</small></div>
+          <div className="remote-actions"><Button  onClick={() => { void loadRemote('POST'); }}>{t.regenerate}</Button><small>{t.regenerateHelp}</small></div>
         </> : <small>{t.remoteUnavailable}</small>}
         <a href="https://github.com/shinshin86/mesh-avatar-studio/blob/main/docs/reference.md#switching-expressions-from-other-apps" target="_blank" rel="noreferrer">{t.remoteDocs}</a></div>
-      </details>
-      <details className="live-lighting" data-testid="lighting-section" onToggle={event => setLightingOpen(event.currentTarget.open)}>
-        <summary><Icon name="light" />{lightingText[language].title}{settings.lighting.enabled && <span className="lighting-on">ON</span>}</summary>
+      </section>
+</> },
+        { key: 'lighting', label: lightingText[language].title, children: <>      <section className="live-lighting" data-testid="lighting-section">
         <div className="lighting-presets"><h3>{t.presets}</h3>
           <div className="preset-slots" role="group" aria-label={t.presets}>
             {presets.map((value, i) => <div className="preset-slot" key={i}>
               {/* The swatch shows the light and ambient colours; the slot number is in the key hint. */}
-              <button type="button" disabled={!value} aria-label={`${t.preset} ${i + 1}${value ? '' : ` (${t.presetEmpty})`}`} aria-pressed={!!value && sameLighting(value, settings.lighting)} aria-keyshortcuts={`Shift+${i + 1}`} onClick={() => applyPreset(i + 1)}>
-                <kbd>⇧{i + 1}</kbd>{value ? <span className={`preset-swatch${value.enabled ? '' : ' off'}`} style={value.enabled ? { background: `linear-gradient(135deg, ${colorHex(value.color)} 50%, ${colorHex(value.ambientColor)} 50%)` } : undefined} /> : t.presetEmpty}</button>
-              <button type="button" className="preset-save" aria-label={`${t.presetSave}: ${t.preset} ${i + 1}`} onClick={() => savePreset(i)}>{t.presetSave}</button>
+              <Button  disabled={!value} aria-label={`${t.preset} ${i + 1}${value ? '' : ` (${t.presetEmpty})`}`} aria-pressed={!!value && sameLighting(value, settings.lighting)} aria-keyshortcuts={`Shift+${i + 1}`} onClick={() => applyPreset(i + 1)}>
+                <kbd>⇧{i + 1}</kbd>{value ? <span className={`preset-swatch${value.enabled ? '' : ' off'}`} style={value.enabled ? { background: `linear-gradient(135deg, ${colorHex(value.color)} 50%, ${colorHex(value.ambientColor)} 50%)` } : undefined} /> : t.presetEmpty}</Button>
+              <Button  className="preset-save" aria-label={`${t.presetSave}: ${t.preset} ${i + 1}`} onClick={() => savePreset(i)}>{t.presetSave}</Button>
             </div>)}
           </div><small>{t.presetHint}</small>
-          {remote && <label>{t.presetUrl}<span className="remote-field"><input readOnly value={`${location.origin}${LIGHTING_PRESET_PATH}`} onFocus={event => event.target.select()} /></span></label>}
+          {remote && <label>{t.presetUrl}<span className="remote-field"><Input readOnly value={`${location.origin}${LIGHTING_PRESET_PATH}`} onFocus={event => event.target.select()} /></span></label>}
         </div>
         <LightingControls value={settings.lighting} onChange={changeLighting} language={language} />
-      </details>
+      </section>
+</> },
+      ]} />
       <p className="live-privacy">{t.privacy}</p>
     </aside></div>
   </main>;

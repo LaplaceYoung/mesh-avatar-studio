@@ -1,3 +1,5 @@
+import { useStudioTheme } from '../studio/Theme';
+import { Button, SelectInput } from '../studio/Controls';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Point, Rig } from 'mesh-avatar';
 import { buildOverlay, changeVertex, imagePoint, moveHandle, nearestEdge, nearestHandle, screen, type Handle, type Viewport } from './model';
@@ -18,6 +20,7 @@ interface Props {
   focusRequest?: { group: string; id: number };
 }
 export function EditorCanvas({ rig, sourceUrl, visible, selected, onSelect, onChange, onBegin, onEnd, focusRequest }: Props) {
+  const { dark } = useStudioTheme();
   const { t, title } = useI18n();
   const canvas = useRef<HTMLCanvasElement>(null);
   const source = useRef<HTMLImageElement | null>(null);
@@ -123,7 +126,7 @@ export function EditorCanvas({ rig, sourceUrl, visible, selected, onSelect, onCh
     element.width = Math.round(size.width);
     element.height = Math.round(size.height);
     const context = element.getContext('2d')!;
-    context.fillStyle = '#f9fafc';
+    context.fillStyle = dark ? '#252a2d' : '#f0efe9';
     context.fillRect(0, 0, element.width, element.height);
     if (imageReady && source.current) {
       context.globalAlpha = 0.7;
@@ -162,7 +165,7 @@ export function EditorCanvas({ rig, sourceUrl, visible, selected, onSelect, onCh
       context.stroke();
     }
     context.globalAlpha = 1;
-  }, [rig, handles, shapes, selected, focusGroup, size, imageReady, view]);
+  }, [rig, handles, shapes, selected, focusGroup, size, imageReady, view, dark]);
   const local = (event: { clientX: number; clientY: number }): Point => {
     const rect = canvas.current!.getBoundingClientRect();
     return [event.clientX - rect.left, event.clientY - rect.top];
@@ -234,14 +237,14 @@ export function EditorCanvas({ rig, sourceUrl, visible, selected, onSelect, onCh
       <div className="canvas-help">
         <span className="context-hint">{hint}</span>
         <div className="zoom-tools" role="group" aria-label={t.zoom}>
-          <button disabled={view.scale <= 0.1} aria-label={t.zoomOut} title={t.zoomOut} onClick={() => setViewport(current => zoomAt(current, current.scale * 0.8, [size.width / 2, size.height / 2]))}>−</button>
-          <button className="zoom-value" data-testid="zoom-value" title={t.actualSize} aria-label={t.actualSize} onClick={() => setViewport(current => zoomAt(current, 1, [size.width / 2, size.height / 2]))}>{Math.round(view.scale * 100)}%</button>
-          <button disabled={view.scale >= 16} aria-label={t.zoomIn} title={t.zoomIn} onClick={() => setViewport(current => zoomAt(current, current.scale * 1.25, [size.width / 2, size.height / 2]))}>+</button>
-          <button title={t.panHint} onClick={fitImage}>{t.fit}</button>
-          <button disabled={!focusGroup || !partBounds(focusGroup, overlay.shapes, overlay.handles)} onClick={() => fitPart(focusGroup)}>{t.fitPart}</button>
+          <Button disabled={view.scale <= 0.1} aria-label={t.zoomOut} title={t.zoomOut} onClick={() => setViewport(current => zoomAt(current, current.scale * 0.8, [size.width / 2, size.height / 2]))}>−</Button>
+          <Button className="zoom-value" data-testid="zoom-value" title={t.actualSize} aria-label={t.actualSize} onClick={() => setViewport(current => zoomAt(current, 1, [size.width / 2, size.height / 2]))}>{Math.round(view.scale * 100)}%</Button>
+          <Button disabled={view.scale >= 16} aria-label={t.zoomIn} title={t.zoomIn} onClick={() => setViewport(current => zoomAt(current, current.scale * 1.25, [size.width / 2, size.height / 2]))}>+</Button>
+          <Button title={t.panHint} onClick={fitImage}>{t.fit}</Button>
+          <Button disabled={!focusGroup || !partBounds(focusGroup, overlay.shapes, overlay.handles)} onClick={() => fitPart(focusGroup)}>{t.fitPart}</Button>
         </div>
       </div>
-      <label className="wheel-setting">{t.wheelMode}<select aria-label={t.wheelMode} value={wheelMode} onChange={event => { setWheelMode(event.target.value); savePreference('mesh-avatar-wheel-mode', event.target.value); }}><option value="auto">{t.wheelAuto}</option><option value="pan">{t.wheelPan}</option></select></label>
+      <label className="wheel-setting">{t.wheelMode}<SelectInput aria-label={t.wheelMode} value={wheelMode} onChange={event => { setWheelMode(event.target.value); savePreference('mesh-avatar-wheel-mode', event.target.value); }}><option value="auto">{t.wheelAuto}</option><option value="pan">{t.wheelPan}</option></SelectInput></label>
     </div>
   );
 }

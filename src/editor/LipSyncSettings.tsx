@@ -1,3 +1,4 @@
+import { Button, Disclosure, RangeInput } from '../studio/Controls';
 import { useEffect, useRef, useState } from 'react';
 import { type LipSyncSettings as Settings, type MeshAvatar } from 'mesh-avatar';
 import { rmsLevel } from '../live/tracking';
@@ -103,16 +104,16 @@ export function LipSyncSettings({ value, onChange, avatar, onPreview, onDemo }: 
   return <div className="audio-lip-settings" data-testid="audio-lip-settings" role="group" aria-label={t.title}>
     <div className="audio-lip-heading"><h3>{t.movementTitle}</h3>{selected === 'custom' && <span className="audio-lip-custom" role="status">{t.custom}</span>}</div>
     <div className="audio-lip-presets" role="group" aria-label={t.movementTitle}>
-      {presetNames.map(name => <button type="button" key={name} aria-pressed={selected === name} disabled={!avatar} onClick={() => {
+      {presetNames.map(name => <Button  key={name} aria-pressed={selected === name} disabled={!avatar} onClick={() => {
         pendingSlider.current = false;
         stop(); apply({ ...settings, ...presets[name], preset: name }); onDemo();
-      }}>{t[name]}</button>)}
+      }}>{t[name]}</Button>)}
     </div>
     <p className="audio-lip-demo-hint">{t.demoHint}</p>
-    <details className="audio-lip-advanced" onToggle={event => { if (!event.currentTarget.open) stop(); }}><summary>{t.advanced}</summary><div>
+    <Disclosure className="audio-lip-advanced" onToggle={open => { if (!open) stop(); }} title={t.advanced}><div>
       <div className="audio-lip-sliders">
         {(['granularity', 'openness', 'closeSpeed'] as const).map(key => <label key={key}>
-          <span>{t[key]}</span><input type="range" aria-label={t[key]} min="0" max="1" step="0.05" value={settings[key]}
+          <span>{t[key]}</span><RangeInput  aria-label={t[key]} min="0" max="1" step="0.05" value={settings[key]}
             onChange={event => { pendingSlider.current = true; apply({ ...settingsRef.current, [key]: Number(event.target.value), preset: 'custom' }); }}
             onPointerUp={commitSlider} onKeyUp={commitSlider} onBlur={commitSlider} />
           <small className="audio-lip-range"><span>{t[`${key}Low`]}</span><span>{t[`${key}High`]}</span></small>
@@ -122,12 +123,12 @@ export function LipSyncSettings({ value, onChange, avatar, onPreview, onDemo }: 
         <input ref={fileInput} type="file" hidden aria-label={t.file} accept="audio/*,.wav,.aiff" onChange={event => {
           stop(); setFailed(false); const file = event.target.files?.[0]; setFileName(file?.name ?? ''); setUrl(file ? URL.createObjectURL(file) : ''); event.target.value = '';
         }} />
-        <button type="button" disabled={!avatar} onClick={() => fileInput.current?.click()}>{t.file}</button>
+        <Button  disabled={!avatar} onClick={() => fileInput.current?.click()}>{t.file}</Button>
         <span role="status" aria-live="polite">{fileName || t.noFile}</span>
       </div>
       <audio ref={audio} src={url || undefined} controls hidden={!url} onPlay={() => { void play(); }} onPause={stop} onEnded={stop} onError={() => { if (url) { stop(); setFailed(true); } }} />
-      {url && <button onClick={stop}>{t.stop}</button>}
+      {url && <Button onClick={stop}>{t.stop}</Button>}
       <small>{t.hint}</small>{failed && <p role="alert">{t.error}</p>}
-    </div></details>
+    </div></Disclosure>
   </div>;
 }

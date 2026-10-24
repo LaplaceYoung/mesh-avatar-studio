@@ -1,3 +1,4 @@
+import { Button, CheckInput } from '../studio/Controls';
 import { useI18n } from './i18n';
 import type { LocalProjectEntry } from './project';
 import type { RecentProject } from './recent-projects';
@@ -8,20 +9,20 @@ export function RecentProjects({ recent, projects, reopen, onOpen, onRemove, onC
 }) {
   const { t, locale } = useI18n();
   return <section className="recent-projects" aria-label={t.recent}>
-    <div className="recent-heading"><h3>{t.recent}</h3>{recent.length > 0 && <button onClick={onClear}>{t.clearHistory}</button>}</div>
+    <div className="recent-heading"><h3>{t.recent}</h3>{recent.length > 0 && <Button onClick={onClear}>{t.clearHistory}</Button>}</div>
     {recent.length === 0 && <p className="recent-empty">{t.noRecent}</p>}
     <div className="recent-list">{recent.map(entry => {
       const browse = entry.kind === 'folder' ? !entry.hasHandle : !projects?.some(item => item.name === entry.serverName);
       const failure = entry.kind === 'server' ? projects?.find(item => item.name === entry.serverName)?.error : undefined;
       return <div key={entry.id} className="recent-row">
-        <button data-testid={`recent-${entry.id}`} className={failure ? 'unreadable-project' : undefined} disabled={!!failure} onClick={() => onOpen(entry)}>
+        <Button data-testid={`recent-${entry.id}`} className={failure ? 'unreadable-project' : undefined} disabled={!!failure} onClick={() => onOpen(entry)}>
           <strong>{entry.serverName === 'sample-miko-qipao' ? t.sampleProject : entry.name}</strong>
           <small>{entry.relativePath} · {new Date(entry.lastOpened).toLocaleString(locale)}</small>
           {failure && <small>{t.unreadableProject} ({failure.code}) · {failure.path}</small>}
           {browse && <small>{t.browseAgain}</small>}
-        </button><button className="remove-recent" aria-label={`${t.removeRecent} ${entry.name}`} onClick={() => onRemove(entry.id)}>×</button>
+        </Button><Button className="remove-recent" aria-label={`${t.removeRecent} ${entry.name}`} onClick={() => onRemove(entry.id)}>×</Button>
       </div>;
     })}</div>
-    <label className="reopen-setting"><input type="checkbox" checked={reopen} onChange={event => onReopen(event.target.checked)} />{t.reopenLast}</label>
+    <label className="reopen-setting"><CheckInput checked={reopen} onChange={event => onReopen(event.target.checked)} />{t.reopenLast}</label>
   </section>;
 }

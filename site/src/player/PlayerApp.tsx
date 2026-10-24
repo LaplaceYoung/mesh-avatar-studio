@@ -1,3 +1,5 @@
+import { Button, CheckInput, ColorInput, Disclosure, RangeInput, SelectInput } from '../../../src/studio/Controls';
+import { ThemeToggle } from '../../../src/studio/Theme';
 import { colorHex, LIVE_EXPRESSIONS, loadMeshAvatar, type LiveExpression, type MeshAvatar } from 'mesh-avatar';
 import { useEffect, useRef, useState, type DragEvent } from 'react';
 import { Icon } from '../../../src/editor/Icon';
@@ -192,8 +194,8 @@ export function PlayerApp({ language }: { language: PlayerLanguage }) {
   const stageBackground = { backgroundColor: background, backgroundImage: background === 'transparent' ? undefined : 'none' };
 
   return <main className={`live-app player-app${fullWindow ? ' player-full' : ''}`} onDragEnter={onDrag} onDragOver={onDrag} onDragLeave={onDrag} onDrop={onDrop}>
-    <header className="live-header"><div><a href="../" aria-label={t.home}>Mesh Avatar Studio</a><h1>Mesh Avatar <span>{t.title}</span></h1></div>
-      <a className="player-language" href={otherLanguage} lang={language === 'ja' ? 'en' : 'ja'}>{t.otherLanguage}</a>
+    <header className="studio-header"><div className="studio-brand"><span className="brand-mark">M</span><div><a href="../" aria-label={t.home}>MESH STUDIO</a><small> / {t.title}</small></div></div><div className="studio-project-name" />
+      <a className="player-language" href={otherLanguage} lang={language === 'ja' ? 'en' : 'ja'}>{t.otherLanguage}</a><ThemeToggle />
     </header>
     <p className="player-intro">{t.intro}</p>
     <div className="live-layout"><section className="live-view">
@@ -209,66 +211,64 @@ export function PlayerApp({ language }: { language: PlayerLanguage }) {
       <section><h2>{t.avatar}</h2>
         <p className="player-source" data-testid="player-source">{sourceName}</p>
         <div className="live-buttons">
-          <button className="live-primary" onClick={() => fileInput.current?.click()}>{t.open}</button>
-          {source.kind === 'file' && <button onClick={() => { setNotice(null); setSource({ kind: 'sample' }); }}>{t.useSample}</button>}
+          <Button type="primary" onClick={() => fileInput.current?.click()}>{t.open}</Button>
+          {source.kind === 'file' && <Button onClick={() => { setNotice(null); setSource({ kind: 'sample' }); }}>{t.useSample}</Button>}
         </div>
         <input ref={fileInput} type="file" accept=".mavatar" hidden data-testid="player-file" onChange={event => { openFile(event.target.files?.[0]); event.target.value = ''; }} />
         {notice && <p role="alert" className="live-error" data-testid="player-notice">{t[notice]}</p>}
         <small>{t.dropHint}</small>
         <small><a href={STUDIO_URL}>{t.makeOwn}</a></small>
       </section>
-      <section><h2>{t.camera}</h2><label>{t.device}<select aria-label={t.camera} value={cameraId} disabled={cameraActive} onChange={event => setCameraId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'videoinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.camera} ${i + 1}`}</option>)}</select></label>
-        <div className="live-buttons"><button className="live-primary" disabled={!cameraActive && viewState !== 'ready'} onClick={() => {
+      <section><h2>{t.camera}</h2><label>{t.device}<SelectInput aria-label={t.camera} value={cameraId} disabled={cameraActive} onChange={event => setCameraId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'videoinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.camera} ${i + 1}`}</option>)}</SelectInput></label>
+        <div className="live-buttons"><Button type="primary" disabled={!cameraActive && viewState !== 'ready'} onClick={() => {
           setCalibrated(false); pose.current.reset();
           if (cameraActive) camera.current?.stop(); else void camera.current?.start(cameraId).then(refreshDevices);
-        }}>{cameraActive ? t.stop : t.start}</button><button disabled={!tracking} onClick={() => setCalibrated(pose.current.calibrate(performance.now()))}>{t.calibrate}</button></div>
+        }}>{cameraActive ? t.stop : t.start}</Button><Button disabled={!tracking} onClick={() => setCalibrated(pose.current.calibrate(performance.now()))}>{t.calibrate}</Button></div>
         <p role="status" data-testid="tracking-status" data-state={status}>{t[status]}</p>
         {backgroundStatus && <p role="alert" className="live-error">{t[backgroundStatus]}</p>}
         <small>{calibrated ? t.calibrated : t.calibrateHint}</small>
-        <label className="live-check"><input type="checkbox" checked={options.mirror} onChange={event => setOptions(current => ({ ...current, mirror: event.target.checked }))} />{t.mirror}</label>
-        <label>{t.sensitivity}<input type="range" min="0.25" max="2" step="0.05" value={options.sensitivity} onChange={event => setOptions(current => ({ ...current, sensitivity: Number(event.target.value) }))} /></label>
-        <label>{t.smoothing}<input type="range" min="0" max="1" step="0.05" value={options.smoothing} onChange={event => setOptions(current => ({ ...current, smoothing: Number(event.target.value) }))} /></label>
-        <label className="live-check"><input type="checkbox" checked={showCamera} onChange={event => setShowCamera(event.target.checked)} />{t.cameraPreview}</label>
+        <label className="live-check"><CheckInput checked={options.mirror} onChange={event => setOptions(current => ({ ...current, mirror: event.target.checked }))} />{t.mirror}</label>
+        <label>{t.sensitivity}<RangeInput  min="0.25" max="2" step="0.05" value={options.sensitivity} onChange={event => setOptions(current => ({ ...current, sensitivity: Number(event.target.value) }))} /></label>
+        <label>{t.smoothing}<RangeInput  min="0" max="1" step="0.05" value={options.smoothing} onChange={event => setOptions(current => ({ ...current, smoothing: Number(event.target.value) }))} /></label>
+        <label className="live-check"><CheckInput checked={showCamera} onChange={event => setShowCamera(event.target.checked)} />{t.cameraPreview}</label>
         <video ref={video} autoPlay muted playsInline className={showCamera ? 'camera-preview' : 'camera-preview camera-hidden'} style={{ transform: options.mirror ? 'scaleX(-1)' : undefined }} aria-label={t.cameraPreview} />
       </section>
-      <section><h2>{t.microphone}</h2><label className="live-check"><input type="checkbox" checked={micActive} disabled={!micActive && viewState !== 'ready'} onChange={event => { if (event.target.checked) void microphone.current?.start(micId).then(refreshDevices); else microphone.current?.stop(); }} />{t.microphone}</label>
-        <select aria-label={t.microphone} value={micId} disabled={micActive} onChange={event => setMicId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'audioinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.microphone} ${i + 1}`}</option>)}</select>
-        <label>{t.gain}<input type="range" min="0.25" max="5" step="0.05" value={gain} onChange={event => setGain(Number(event.target.value))} /></label><small role="status">{t[micState]}</small>
+      <section><h2>{t.microphone}</h2><label className="live-check"><CheckInput checked={micActive} disabled={!micActive && viewState !== 'ready'} onChange={event => { if (event.target.checked) void microphone.current?.start(micId).then(refreshDevices); else microphone.current?.stop(); }} />{t.microphone}</label>
+        <SelectInput aria-label={t.microphone} value={micId} disabled={micActive} onChange={event => setMicId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'audioinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.microphone} ${i + 1}`}</option>)}</SelectInput>
+        <label>{t.gain}<RangeInput  min="0.25" max="5" step="0.05" value={gain} onChange={event => setGain(Number(event.target.value))} /></label><small role="status">{t[micState]}</small>
       </section>
-      <section><h2>{t.background}</h2><select aria-label={t.background} value={background} onChange={event => setBackground(backgroundColor(event.target.value))}>
+      <section><h2>{t.background}</h2><SelectInput aria-label={t.background} value={background} onChange={event => setBackground(backgroundColor(event.target.value))}>
         <option value="transparent">{t.none}</option><option value="#00ff00">{t.green}</option><option value="#0000ff">{t.blue}</option>{!['transparent', '#00ff00', '#0000ff'].includes(background) && <option value={background}>{t.custom}</option>}
-      </select><small className="background-hint" data-testid="background-hint">{background === 'transparent' ? t.bgHintNone : ['#00ff00', '#0000ff'].includes(background) ? t.bgHintChroma : t.bgHintCustom}</small>
-        <label>{t.custom}<input type="color" value={background === 'transparent' ? '#ffffff' : background} onChange={event => setBackground(event.target.value)} /></label>
-        <label>{t.fit}<select value={fit} onChange={event => setFit(event.target.value as 'contain' | 'cover')}><option value="contain">{t.contain}</option><option value="cover">{t.cover}</option></select></label>
+      </SelectInput><small className="background-hint" data-testid="background-hint">{background === 'transparent' ? t.bgHintNone : ['#00ff00', '#0000ff'].includes(background) ? t.bgHintChroma : t.bgHintCustom}</small>
+        <label>{t.custom}<ColorInput  value={background === 'transparent' ? '#ffffff' : background} onChange={event => setBackground(event.target.value)} /></label>
+        <label>{t.fit}<SelectInput value={fit} onChange={event => setFit(event.target.value as 'contain' | 'cover')}><option value="contain">{t.contain}</option><option value="cover">{t.cover}</option></SelectInput></label>
       </section>
       <section><h2>{t.show}</h2><small>{t.showHelp}</small>
         <div className="live-buttons player-show">
           {canPopOut
-            ? <button className="live-primary" disabled={viewState !== 'ready'} onClick={() => { if (popup) popup.close(); else void openPopup().catch(() => undefined); }}>{popup ? t.popIn : t.popOut}</button>
+            ? <Button type="primary" disabled={viewState !== 'ready'} onClick={() => { if (popup) popup.close(); else void openPopup().catch(() => undefined); }}>{popup ? t.popIn : t.popOut}</Button>
             : <small>{t.popOutUnsupported}</small>}
-          <button disabled={!!popup} onClick={() => setFullWindow(true)}>{t.fullWindow}</button>
+          <Button disabled={!!popup} onClick={() => setFullWindow(true)}>{t.fullWindow}</Button>
         </div>
         <small>{t.keepVisible}</small>
       </section>
-      <details className="live-expression" data-testid="expression-section">
-        <summary><Icon name="face" />{t.expression}{expression !== 'neutral' && <span className="expression-on">{t[expression]}</span>}</summary>
+      <Disclosure className="live-expression" title={<><Icon name="face" />{t.expression}{expression !== 'neutral' && <span className="expression-on">{t[expression]}</span>}</>}>
         <div className="live-expression-body"><div className="expression-buttons" role="group" aria-label={t.expression}>
-          {LIVE_EXPRESSIONS.map((name, i) => <button key={name} type="button" aria-pressed={expression === name} aria-keyshortcuts={String(i + 1)} onClick={() => setExpression(name)}><kbd>{i + 1}</kbd>{t[name]}</button>)}
+          {LIVE_EXPRESSIONS.map((name, i) => <Button key={name}  aria-pressed={expression === name} aria-keyshortcuts={String(i + 1)} onClick={() => setExpression(name)}><kbd>{i + 1}</kbd>{t[name]}</Button>)}
         </div><small>{t.expressionHint}</small></div>
-      </details>
-      <details className="live-lighting" data-testid="lighting-section" onToggle={event => setLightingOpen(event.currentTarget.open)}>
-        <summary><Icon name="light" />{lightingText[language].title}{lighting.enabled && <span className="lighting-on">ON</span>}</summary>
+      </Disclosure>
+      <Disclosure className="live-lighting" onToggle={setLightingOpen} title={<><Icon name="light" />{lightingText[language].title}{lighting.enabled && <span className="lighting-on">ON</span>}</>}>
         <div className="lighting-presets"><h3>{t.presets}</h3>
           <div className="preset-slots" role="group" aria-label={t.presets}>
             {presets.map((value, i) => <div className="preset-slot" key={i}>
-              <button type="button" disabled={!value} aria-label={`${t.preset} ${i + 1}${value ? '' : ` (${t.presetEmpty})`}`} aria-pressed={!!value && sameLighting(value, lighting)} aria-keyshortcuts={`Shift+${i + 1}`} onClick={() => applyPreset(i + 1)}>
-                <kbd>⇧{i + 1}</kbd>{value ? <span className={`preset-swatch${value.enabled ? '' : ' off'}`} style={value.enabled ? { background: `linear-gradient(135deg, ${colorHex(value.color)} 50%, ${colorHex(value.ambientColor)} 50%)` } : undefined} /> : t.presetEmpty}</button>
-              <button type="button" className="preset-save" aria-label={`${t.presetSave}: ${t.preset} ${i + 1}`} onClick={() => savePreset(i)}>{t.presetSave}</button>
+              <Button  disabled={!value} aria-label={`${t.preset} ${i + 1}${value ? '' : ` (${t.presetEmpty})`}`} aria-pressed={!!value && sameLighting(value, lighting)} aria-keyshortcuts={`Shift+${i + 1}`} onClick={() => applyPreset(i + 1)}>
+                <kbd>⇧{i + 1}</kbd>{value ? <span className={`preset-swatch${value.enabled ? '' : ' off'}`} style={value.enabled ? { background: `linear-gradient(135deg, ${colorHex(value.color)} 50%, ${colorHex(value.ambientColor)} 50%)` } : undefined} /> : t.presetEmpty}</Button>
+              <Button  className="preset-save" aria-label={`${t.presetSave}: ${t.preset} ${i + 1}`} onClick={() => savePreset(i)}>{t.presetSave}</Button>
             </div>)}
           </div><small>{t.presetHint}</small>
         </div>
         <LightingControls value={lighting} onChange={setLighting} language={language} />
-      </details>
+      </Disclosure>
       <p className="live-privacy">{t.privacy}</p>
       {source.kind === 'sample' && <p className="live-privacy">{t.credit} <a href={MIKO_TERMS}>{t.terms}</a></p>}
     </aside></div>

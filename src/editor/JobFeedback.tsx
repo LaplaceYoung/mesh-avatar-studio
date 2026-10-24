@@ -1,3 +1,4 @@
+import { Disclosure } from '../studio/Controls';
 import type { Rig } from 'mesh-avatar';
 import { jobReason } from './job-reason';
 import { useI18n } from './i18n';
@@ -11,7 +12,7 @@ export function JobFeedback({ error, log = '', accepted = false, importing = fal
   return <div className="job-feedback" data-testid="job-feedback">
     {error && <p role="alert">{error.code === 'reloadFailed' ? t.reloadFailed : <>{importing ? t.importRejected : t.jobFailed}{reason !== t.jobFailed && ` ${reason}`}</>}</p>}
     {accepted && <p role="status">{t.importAccepted}{/importing the mask area only/.test(details) && ` ${t.importMaskOnly}`}</p>}
-    {metrics.length > 0 && <details><summary>{t.metricsTitle}</summary>{metrics.map(metric => <p key={metric[1]}><code>{metric[1]}</code>: {t.outsideMax} {metric[2]}/255 · {t.outsideMean} {metric[3]}/255 · {t.outsidePixels} {metric[4]} ({metric[5]}/255)</p>)}</details>}
-    {details && <details><summary>{t.showLog}</summary><pre>{details}</pre></details>}
+    {metrics.length > 0 && <Disclosure title={t.metricsTitle}>{metrics.map(metric => <p key={metric[1]}><code>{metric[1]}</code>: {t.outsideMax} {metric[2]}/255 · {t.outsideMean} {metric[3]}/255 · {t.outsidePixels} {metric[4]} ({metric[5]}/255)</p>)}</Disclosure>}
+    {details && <Disclosure title={t.showLog}><pre>{details}</pre></Disclosure>}
   </div>;
 }

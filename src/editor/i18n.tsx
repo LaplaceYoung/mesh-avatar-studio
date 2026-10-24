@@ -171,7 +171,7 @@ const Context = createContext({ language: 'en' as Language, setLanguage: (_: Lan
 export function I18nProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<Language>(() => {
     const saved = readPreference(LANGUAGE_KEY);
-    return saved === 'ja' || saved === 'zh' ? saved : 'en';
+    return saved === 'ja' || saved === 'en' ? saved : 'zh';
   });
   useEffect(() => { document.documentElement.lang = language === 'zh' ? 'zh-CN' : language; savePreference(LANGUAGE_KEY, language); }, [language]);
   return <Context.Provider value={{ language, setLanguage }}>{children}</Context.Provider>;

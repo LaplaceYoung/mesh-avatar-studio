@@ -15,25 +15,39 @@ import { GROUPS } from './parts';
 import { PartList } from './PartList';
 import { GUIDE_KEY, I18nProvider, readPreference, savePreference, useI18n, type PartGroup } from './i18n';
 import { FirstGuide, GuideSteps, Help } from './Guide';
-import { Icon } from './Icon';
 import { RecentProjects } from './RecentProjects';
 import { AskAgent } from './AskAgent';
-import { Menu } from './Menu';
+import { MenuScope } from './Menu';
 import { VariantsPanel } from './VariantsPanel';
 import { JobFeedback } from './JobFeedback';
 import { CopyButton } from './CopyButton';
 import { readRecent, addRecent, saveRecent, REOPEN_KEY, pickDirectory, hasDirectoryPicker, directoryFiles,
   keepDirectory, restoreDirectory, forgetDirectory, clearDirectories, type RecentProject, type ProjectDirectory } from './recent-projects';
-import './style.css';
+import { App as AntApp, Button, Drawer, Empty, Segmented, Space, Splitter, Tabs, Tag, Tooltip } from 'antd';
+import { AppstoreOutlined, CodeOutlined, FolderOpenOutlined, SaveOutlined, UndoOutlined, RedoOutlined, QuestionCircleOutlined, VideoCameraOutlined } from '@ant-design/icons';
+import { StudioTheme, ThemeToggle } from '../studio/Theme';
+import { AgentDock } from '../studio/AgentDock';
 import { liveText } from '../live/i18n';
 
 type EditorError = { kind: 'invalidRig' | 'invalidFolder' | 'missingFolderFiles' | 'unreadableFolder' | 'unreadableProject' | 'invalidValue' | 'saveError' | 'revealError' | 'copyError' | 'continueError'; paths: string[] };
 function errorPaths(value: string) { return [...new Set(value.match(/rig(?:\.[\w]+|\[\d+\])+/g) ?? [])]; }
 
-export function App() { return <I18nProvider><Workspace /></I18nProvider>; }
+export function App() { return <I18nProvider><StudioTheme><MenuScope><Workspace /></MenuScope></StudioTheme></I18nProvider>; }
 function Workspace() {
   const { t, parts, language, locale, setLanguage, title } = useI18n();
-  const openMenu = useRef<HTMLDetailsElement>(null);
+  const [projectLibrary, setProjectLibrary] = useState(false);
+  const [agentOpen, setAgentOpen] = useState(true);
+  const [inspectorTab, setInspectorTab] = useState('preview');
+  const { modal } = AntApp.useApp();
+  const zh = language === 'zh';
+  const openMenu = useRef<{ open: boolean } | null>(null);
+  openMenu.current = { get open() { return projectLibrary; }, set open(value: boolean) { setProjectLibrary(value); } };
+  useEffect(() => {
+    const show = () => setAgentOpen(true);
+    window.addEventListener('studio:agent-prompt', show);
+    return () => window.removeEventListener('studio:agent-prompt', show);
+  }, []);
+
   const [guide, setGuide] = useState(() => readPreference(GUIDE_KEY) !== '1');
   const [help, setHelp] = useState(false);
   const [history] = useState(() => new RigHistory(parseRig(fixture)));
@@ -239,7 +253,7 @@ function Workspace() {
     window.addEventListener('keydown', keyboard);
     return () => window.removeEventListener('keydown', keyboard);
   }, [history]);
-  const selectPart = (group: string) => { setSelected(group); setVisible(current => current.includes(group) ? current : [...current, group]); };
+  const selectPart = (group: string) => { setInspectorTab('properties'); setSelected(group); setVisible(current => current.includes(group) ? current : [...current, group]); };
   const selectedGroup = selected?.split('.')[0] as PartGroup | undefined;
   const selectedPart = selectedGroup && parts[selectedGroup];
   const currentLayers = JSON.parse(layerSignature(rig)), builtLayers = JSON.parse(builtSignature);
@@ -390,87 +404,94 @@ function Workspace() {
     finally { jobRef.current = null; setArchiveBusy(false); }
   };
   const importControl = <ImportAvatar busy={busy || saving} available={!!rootPath} onImport={file => { void importFile(file); }} />;
-  return <main onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file?.name.toLowerCase().endsWith('.mavatar')) void importFile(file); else void openFile(file); }}>
-    <header className="toolbar">
-      <div className="brand"><h1>{t.product}</h1><p>{t.subtitle}</p></div>
-      <nav aria-label={t.tools}>
-        <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t.rigFile}
-          onChange={event => { void openFile(event.target.files?.[0]); event.target.value = ''; }} />
-        <input ref={folderInput} type="file" multiple hidden aria-label={t.folderFiles} {...{ webkitdirectory: '' }}
-          onChange={event => { void openFolder(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
-        <Menu className="open-menu" disabled={busy} onOpen={() => { void localProjects().then(setProjects); }}
-          detailsRef={el => { openMenu.current = el; }}
-          summary={<>{t.openProject}<Icon name="chevron" /></>}>
-          <div className="project-menu">{importControl}{recentControl}<p className="project-help">{t.projectHelp}</p>
-            {projects && <div className="project-list" aria-label={t.localProjects}>
-              {projects.length === 0 && <p>{t.noProjects}</p>}
-              {projects.map(project => <button key={project.name} className={project.error ? 'unreadable-project' : undefined} disabled={opening || !!project.error} data-testid={`project-${project.name}`} onClick={() => { void openLocal(project); }}>
-                <strong>{project.readOnly ? t.sampleProject : project.name}</strong><small>{project.relativePath}</small>
-                <small>{project.error ? <>{t.unreadableProject} ({project.error.code}) · {project.error.path}</> : <>{t.updated}: {new Date(project.updatedAt).toLocaleString(locale)}
-                  {project.hasSprites && <span className="badge">{t.drawnVariants}</span>}{project.readOnly && <span className="badge">{t.readOnly}</span>}{project.hasSource === false && <span className="badge">{sharing.playbackBadge}</span>}</>}</small>
-              </button>)}
-            </div>}
-            <button onClick={() => { void chooseFile(true); }}>{t.openFolder}</button><button disabled={playbackOnly} onClick={() => { void chooseFile(false); }}>{t.openRig}</button>
-          </div>
-        </Menu>
+  const projectName = localProject?.readOnly ? t.sampleProject : localProject?.name || pickedName || t.sampleProject;
+  const projectPath = localProject?.relativePath ?? (pickedName || 'samples/miko-qipao');
+  const refreshAfterAgent = () => {
+    void localProjects().then(setProjects);
+    if (!localProject) { setProjectLibrary(true); return; }
+    const reload = () => { void openLocal(localProject); };
+    if (dirty) modal.confirm({ title: zh ? '重新加载磁盘上的项目？' : 'Reload project from disk?', content: zh ? '当前未保存的编辑会被磁盘版本替换。请先保存需要保留的修改。' : 'Unsaved editor changes will be replaced. Save changes you want to keep first.', onOk: reload });
+    else reload();
+  };
+  const openEntry = (entry: LocalProjectEntry) => {
+    if (dirty) modal.confirm({ title: zh ? '切换项目？' : 'Switch project?', content: zh ? '当前未保存的修改将丢失。' : 'Unsaved changes will be lost.', onOk: () => openLocal(entry) });
+    else void openLocal(entry);
+  };
+  return <main className="studio-app" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file?.name.toLowerCase().endsWith('.mavatar')) void importFile(file); else void openFile(file); }}>
+    <header className="studio-header">
+      <div className="studio-brand"><span className="brand-mark">M</span><div><h1>MESH <span>STUDIO</span></h1><small>{zh ? '角色创作工作台' : 'AVATAR WORKBENCH'}</small></div></div>
+      <div className="studio-project-name"><strong>{projectName}</strong><Tag color={dirty ? 'orange' : undefined}>{dirty ? zh ? '未保存' : 'Unsaved' : localProject?.readOnly || !localProject ? t.readOnly : zh ? '已保存' : 'Saved'}</Tag></div>
+      <nav className="studio-actions" aria-label={t.tools}>
+        <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t.rigFile} onChange={event => { void openFile(event.target.files?.[0]); event.target.value = ''; }} />
+        <input ref={folderInput} type="file" multiple hidden aria-label={t.folderFiles} {...{ webkitdirectory: '' }} onChange={event => { void openFolder(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+        <Button aria-label={t.openProject} icon={<FolderOpenOutlined />} onClick={() => { setProjectLibrary(true); void localProjects().then(setProjects); }}>{t.openProject}</Button>
+        <Tooltip title={`${t.save} · ⌘S`}><Button icon={<SaveOutlined />} aria-label={t.save} loading={saving} disabled={busy || playbackOnly} onClick={() => { void save(); }} /></Tooltip>
+        <Button icon={<UndoOutlined />} aria-label={t.undo} disabled={!history.canUndo || busy || playbackOnly} onClick={() => setRig(history.undo())} />
+        <Button icon={<RedoOutlined />} aria-label={t.redo} disabled={!history.canRedo || busy || playbackOnly} onClick={() => setRig(history.redo())} />
         <ExportAvatar busy={busy || saving} available={!!rootPath || !!pickedFiles.current} writable={writable} dirty={dirty} stale={changed.length > 0} onExport={exportFile} />
-        <button className="icon-button" aria-label={t.save} disabled={saving || busy || playbackOnly} title={`${t.save} · ⌘S`} onClick={() => { void save(); }}><Icon name="save" /></button>
-        <span className="toolbar-divider" />
-        <button className="icon-button" aria-label={t.undo} title={`${t.undo} · ⌘Z`} disabled={!history.canUndo || busy || playbackOnly} onClick={() => setRig(history.undo())}><Icon name="undo" /></button>
-        <button className="icon-button" aria-label={t.redo} title={`${t.redo} · ⇧⌘Z`} disabled={!history.canRedo || busy || playbackOnly} onClick={() => setRig(history.redo())}><Icon name="redo" /></button>
-        <span className="toolbar-divider" />
-        <a className="live-link" href={localProject || listedProject || !pickedName ? `/live.html?project=${encodeURIComponent(localProject?.name ?? listedProject?.name ?? 'sample-miko-qipao')}` : undefined}
-          target="_blank" rel="noreferrer" aria-disabled={!!pickedName && !localProject && !listedProject}
-          title={pickedName && !localProject && !listedProject ? liveText[language].liveUnavailable : liveText[language].title}><Icon name="live" />{liveText[language].title}</a>
-        <button className="icon-button" aria-label={t.help} title={t.help} aria-expanded={help} onClick={() => setHelp(current => !current)}><Icon name="help" /></button>
-        <div className="language-toggle" role="group" aria-label={t.language}>
-          <button aria-label={t.english} aria-pressed={language === 'en'} onClick={() => setLanguage('en')}>{t.enCode}</button>
-          <button aria-label={t.japanese} aria-pressed={language === 'ja'} onClick={() => setLanguage('ja')}>{t.jaCode}</button>
-          <button aria-label={t.chinese} aria-pressed={language === 'zh'} onClick={() => setLanguage('zh')}>{t.zhCode}</button>
-        </div>
+        <Button icon={<VideoCameraOutlined />} href={localProject || listedProject || !pickedName ? `/live.html?project=${encodeURIComponent(localProject?.name ?? listedProject?.name ?? 'sample-miko-qipao')}` : undefined} disabled={!!pickedName && !localProject && !listedProject} target="_blank" rel="noreferrer">{liveText[language].title}</Button>
+        <Button type={agentOpen ? 'primary' : 'default'} icon={<CodeOutlined />} aria-pressed={agentOpen} onClick={() => setAgentOpen(value => !value)}>Agent</Button>
+        <Button icon={<QuestionCircleOutlined />} aria-label={t.help} onClick={() => setHelp(true)} />
+        <Segmented aria-label={t.language} size="small" value={language} options={[{ value: 'zh', label: '中文' }, { value: 'en', label: 'EN' }, { value: 'ja', label: 'JA' }]} onChange={setLanguage} />
+        <ThemeToggle />
       </nav>
     </header>
-    {(localProject || pickedName) && <div className="project-location" data-testid="project-location">
-      <strong>{localProject?.readOnly ? t.sampleProject : localProject?.name || pickedName}</strong>
-      {localProject && <><CopyButton value={localProject.absolutePath} label={t.copyPath} icon />
-      <button className="icon-button" aria-label={navigator.platform.includes('Mac') ? t.showFinder : t.showFolder} title={navigator.platform.includes('Mac') ? t.showFinder : t.showFolder} onClick={() => { void reveal(); }}><Icon name="folder" /></button>
-      {localProject.readOnly && <span className="badge">{t.readOnly}</span>}</>}
-    </div>}
+    <Drawer title={<Space><AppstoreOutlined />{zh ? '项目工作台' : 'Projects'}</Space>} placement="left" size={680} open={projectLibrary} onClose={() => setProjectLibrary(false)}>
+      <div className="library-intro"><h2>{zh ? '从一张插画，到一个角色。' : 'An illustration. A character in motion.'}</h2><p>{t.projectHelp}</p><Space wrap><Button icon={<FolderOpenOutlined />} onClick={() => { void chooseFile(true); }}>{t.openFolder}</Button><Button disabled={playbackOnly} onClick={() => { void chooseFile(false); }}>{t.openRig}</Button></Space></div>
+      <Tabs items={[
+        { key: 'local', label: t.localProjects, children: <div className="library-list">{projects?.map(project => <Button block key={project.name} disabled={opening || !!project.error} data-testid={`project-${project.name}`} onClick={() => openEntry(project)}><div><strong>{project.readOnly ? t.sampleProject : project.name}</strong><small>{project.relativePath}</small><small>{project.error ? `${t.unreadableProject}: ${project.error.code}` : `${t.updated}: ${new Date(project.updatedAt).toLocaleString(locale)}`}</small></div><Tag>{project.readOnly ? t.readOnly : !project.error && project.hasSource === false ? sharing.playbackBadge : zh ? '可编辑' : 'Editable'}</Tag></Button>)}{projects?.length === 0 && <Empty description={t.noProjects} />}</div> },
+        { key: 'recent', label: t.recent, children: recentControl },
+        { key: 'import', label: sharing.importTitle, children: importControl },
+        { key: 'create', label: t.newIllustration, children: <AskAgent newProject rootPath={rootPath} /> },
+      ]} />
+    </Drawer>
+    <div className="studio-notices">
     {notice && <div role="status" className="save-notice">{t[notice.key]}{notice.path && ` ${notice.path}`}</div>}
     {archiveFeedback && <div className={`archive-feedback${archiveFeedback.error ? ' error' : ''}`} role={archiveFeedback.error ? 'alert' : 'status'}>
-      <span>{archiveFeedback.error ?? `${sharing.imported} ${archiveFeedback.name}`}</span><button onClick={() => setArchiveFeedback(null)}>{sharing.dismiss}</button>
+      <span>{archiveFeedback.error ?? `${sharing.imported} ${archiveFeedback.name}`}</span><Button onClick={() => setArchiveFeedback(null)}>{sharing.dismiss}</Button>
     </div>}
     {playbackOnly && <p className="playback-notice" role="status">{sharing.playbackOnly}</p>}
     {help && <Help onClose={() => setHelp(false)} onGuide={() => { setGuide(true); setHelp(false); }} />}
     {(dragStale ?? changed.length > 0) && <div className="stale" data-testid="stale-banner"><p role="status">{localProject && !localProject.readOnly ? t.staleLocal : sampleEditing ? t.staleSample : listedProject ? t.staleListed : t.stale}</p><small>{t.changedParts}: {changed.map(key => parts[key as PartGroup]?.[0] ?? title(key)).join(' · ')}</small>
-      {localProject && !localProject.readOnly ? <button className="primary" disabled={job !== null || saving} onClick={() => { setRebuildError(null); void runJob('rebuild').catch(error => setRebuildError(error instanceof ProjectJobError ? error : new ProjectJobError('toolFailed'))); }}>{job === 'rebuild' ? t.rebuilding : t.rebuild}</button> : <><small>{sampleEditing ? t.sampleRebuildReason : t.folderRebuildReason}</small>{sampleEditing || listedProject ? <button className="primary" disabled={opening || saving || job !== null || (sampleEditing && !rootPath)} onClick={() => { void continueEditing(); }}>{opening ? t.operationBusy : sampleEditing ? t.copyContinue : t.reopenListed}</button> : <p>{t.rebuildUnavailable}</p>}</>}
+      {localProject && !localProject.readOnly ? <Button type="primary" disabled={job !== null || saving} onClick={() => { setRebuildError(null); void runJob('rebuild').catch(error => setRebuildError(error instanceof ProjectJobError ? error : new ProjectJobError('toolFailed'))); }}>{job === 'rebuild' ? t.rebuilding : t.rebuild}</Button> : <><small>{sampleEditing ? t.sampleRebuildReason : t.folderRebuildReason}</small>{sampleEditing || listedProject ? <Button type="primary" disabled={opening || saving || job !== null || (sampleEditing && !rootPath)} onClick={() => { void continueEditing(); }}>{opening ? t.operationBusy : sampleEditing ? t.copyContinue : t.reopenListed}</Button> : <p>{t.rebuildUnavailable}</p>}</>}
       {rebuildError && <JobFeedback error={rebuildError} rig={rig} />}
       {error?.kind === 'continueError' && errorNotice}
     </div>}
-    {!sourceUrl && !assets && <section className="panel empty-project"><h2>{checking ? t.checking : t.emptyTitle}</h2><p>{t.projectHelp}</p><p>{t.emptyHelp}</p>{recentControl}<AskAgent newProject rootPath={rootPath} />{errorNotice}</section>}
-    {(sourceUrl || assets) && <div className={`workspace${playbackOnly ? ' playback-only' : ''}`}>
-      {!playbackOnly && <div className="parts-container" inert={busy}><PartList rig={rig} visible={visible} selected={selected} onSelect={selectPart} onFocus={group => { selectPart(group); setFocusRequest(current => ({ group, id: (current?.id ?? 0) + 1 })); }} onVisible={setVisible} /></div>}
-      {!playbackOnly && <section className="panel editor-panel" inert={busy}>
-        <div className="panel-title"><h2>{t.source}</h2><span>{rig.image.width} × {rig.image.height} {t.px}</span></div>
-        <div className="canvas-stage">
-          <EditorCanvas sourceUrl={sourceUrl} rig={rig} visible={visible} selected={selected} onSelect={setSelected} onChange={update} focusRequest={focusRequest}
-            onBegin={() => { history.begin(); setDragStale(changed.length > 0); }}
-            onEnd={() => { history.end(); setRig(structuredClone(history.present)); setDragStale(null); }} />
-          {guide && <FirstGuide onDismiss={dismissGuide} />}
-        </div>
-      </section>}
-      <div className="right-column">
-        <Preview key={localProject?.name ?? (pickedName || 'sample-miko-qipao')} projectKey={localProject?.name ?? (pickedName || 'sample-miko-qipao')} rig={rig} assets={assets} lipSync={lipSync} onLipSyncChange={setLipSync} hasMouthSprites={mouthSprites} onDrawMouth={playbackOnly ? undefined : () => setMouthRequest(value => value + 1)} />
-        {!playbackOnly && <VariantsPanel project={localProject} projectPath={localProject?.relativePath ?? (pickedName ? `<${pickedName}>` : 'samples/miko-qipao')} assets={assets} rootPath={rootPath} busy={busy || saving} stale={changed.length > 0} onRun={runJob} mouthRequest={mouthRequest} onMouthPresence={setMouthSprites} />}
-        {!localProject && !pickedName && <details className="panel new-illustration"><summary>{t.newIllustration}</summary><AskAgent newProject rootPath={rootPath} /></details>}
-        {!playbackOnly && <aside className="panel inspector" inert={busy}>
+
+    </div>
+    <div className="studio-body">
+    <Splitter orientation="vertical" className="studio-vertical" onDraggerDoubleClick={() => setAgentOpen(value => !value)}>
+      <Splitter.Panel min={250}>
+      {(sourceUrl || assets) ? <Splitter className="workspace" style={{ height: '100%' }}>
+        <Splitter.Panel defaultSize={260} min={180} max={360} collapsible size={playbackOnly ? 0 : undefined}>
+          <div className="parts-container" inert={busy}><PartList rig={rig} visible={visible} selected={selected} onSelect={selectPart} onFocus={group => { selectPart(group); setFocusRequest(current => ({ group, id: (current?.id ?? 0) + 1 })); }} onVisible={setVisible} /></div>
+        </Splitter.Panel>
+        <Splitter.Panel min={280}>
+          <section className="editor-panel" inert={busy}>
+            <div className="panel-heading"><Space><span className="section-index">01</span><strong>{t.source}</strong></Space><span className="muted">{rig.image.width} × {rig.image.height} {t.px}</span></div>
+            {!playbackOnly ? <div className="canvas-stage"><EditorCanvas sourceUrl={sourceUrl} rig={rig} visible={visible} selected={selected} onSelect={value => { setSelected(value); setInspectorTab('properties'); }} onChange={update} focusRequest={focusRequest} onBegin={() => { history.begin(); setDragStale(changed.length > 0); }} onEnd={() => { history.end(); setRig(structuredClone(history.present)); setDragStale(null); }} />{guide && <FirstGuide onDismiss={dismissGuide} />}</div> : <Empty description={sharing.playbackOnly} />}
+          </section>
+        </Splitter.Panel>
+        <Splitter.Panel defaultSize={340} min={300} max={620} collapsible>
+          <div className="inspector-column"><Tabs activeKey={inspectorTab} onChange={setInspectorTab} items={[
+            { key: 'preview', label: t.preview, forceRender: true, children: <Preview key={localProject?.name ?? (pickedName || 'sample-miko-qipao')} projectKey={localProject?.name ?? (pickedName || 'sample-miko-qipao')} rig={rig} assets={assets} lipSync={lipSync} onLipSyncChange={setLipSync} hasMouthSprites={mouthSprites} onDrawMouth={playbackOnly ? undefined : () => { setInspectorTab('variants'); setMouthRequest(value => value + 1); }} /> },
+            { key: 'properties', label: t.selection, children: <>{!playbackOnly && <aside className="panel inspector" inert={busy}>
           <div className="selection-heading"><h2>{selectedPart?.[0] ?? t.selection}</h2></div>
           {errorNotice}
           {selectedPart ? <><p className="part-description">{selectedPart[1]}</p><p className="part-tip"><strong>{t.tip}</strong> {selectedPart[2]}</p>
             <div className="fields">{selected && <RigFields rig={rig} path={selected} onChange={(path, value) => update(setAt(rig, path, value))} />}</div></>
             : <div className="selection-empty"><p>{t.selectPart}</p><GuideSteps /></div>}
-        </aside>}
-      </div>
-    </div>}
+        </aside>}</> },
+            { key: 'variants', label: t.variantsTitle, forceRender: true, children: <>{!playbackOnly && <VariantsPanel project={localProject} projectPath={localProject?.relativePath ?? (pickedName ? `<${pickedName}>` : 'samples/miko-qipao')} assets={assets} rootPath={rootPath} busy={busy || saving} stale={changed.length > 0} onRun={runJob} mouthRequest={mouthRequest} onMouthPresence={setMouthSprites} />}</> },
+          ]} /></div>
+        </Splitter.Panel>
+      </Splitter> : <div className="empty-project"><h2>{checking ? t.checking : t.emptyTitle}</h2><p>{t.projectHelp}</p><Button type="primary" onClick={() => setProjectLibrary(true)}>{t.openProject}</Button>{errorNotice}</div>}
+      </Splitter.Panel>
+      <Splitter.Panel defaultSize={380} size={agentOpen ? undefined : 0} min={220} max="70%" resizable={agentOpen}>
+        <AgentDock project={projectPath} selection={selected} onRefresh={refreshAfterAgent} />
+      </Splitter.Panel>
+    </Splitter>
+    </div>
+    <footer className="studio-status"><Space><span className="status-dot" />{zh ? '本地工作区' : 'Local workspace'}<span data-testid="project-location">{projectPath}</span>{localProject && <><CopyButton value={localProject.absolutePath} label={t.copyPath} icon /><Button size="small" type="text" onClick={() => { void reveal(); }}>{t.showFolder}</Button></>}</Space><span>{selectedPart?.[0] ?? t.selectPart} · WebGL</span></footer>
   </main>;
 }

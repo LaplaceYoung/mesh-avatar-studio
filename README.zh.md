@@ -126,3 +126,16 @@ npm run dev
 示例角色 Miko（`samples/miko-qipao/`）不受 MIT License 覆盖。Miko 是 AITuber OnAir 的角色，© Yuki Shindo（AITuber OnAir），其图像依据[Miko 角色使用指南](https://miko.aituberonair.com/#terms)提供，详见 [samples/miko-qipao/MIKO_ASSET_TERMS.md](samples/miko-qipao/MIKO_ASSET_TERMS.md)。可作为你自己作品的一部分使用或修改，但不得单独分发或作为素材集合分发。本项目不是 AITuber OnAir 的官方产品。
 
 面部追踪使用 [MediaPipe](https://github.com/google-ai-edge/mediapipe)（`@mediapipe/tasks-vision` 以及 `vendor/mediapipe/` 中的 Face Landmarker 模型），© The MediaPipe Authors，依据 Apache License 2.0 授权，详见 [vendor/mediapipe/LICENSE](vendor/mediapipe/LICENSE)。
+
+## Fork 工作台重构（开发中）
+
+当前 fork 正在改为独立的本地角色工作台，使用 Ant Design 6、Ant Design X、
+亮暗双主题与可拖动分屏。运行 `npm install`、`npm run dev` 后，在底部 Agent
+面板选择本机安装的 Claude Code、Codex 或 Pi，点击“连接”启动真实 CLI 会话。
+不需要在网页填写或复制 API 密钥；登录、模型和工具权限沿用该 CLI 的配置。
+点击“发送”提交任务，原生终端可继续处理权限确认和快捷命令。
+
+Agent 与本地用户具有相应的文件访问权限，本工作台不是执行沙箱。不要向不信任
+的页面暴露开发服务器，不使用 `--host 0.0.0.0` 开放 Agent 接口。修改项目文件前
+先保存编辑器里的修改；完成后用“刷新项目”重新加载。初始样例仍是只读素材。
+目前仅在 macOS 上验证了三个 CLI 的启动连接，尚未完成全量浏览器回归验收。

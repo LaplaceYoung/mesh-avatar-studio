@@ -1,10 +1,10 @@
+import { Button, CheckInput, Disclosure } from '../studio/Controls';
 import { useEffect, useRef, useState } from 'react';
 import { useI18n } from './i18n';
 import { variantGroups, variantNames, projectVariantRequests, openSampleAvatar, ProjectJobError, type LocalProject, type ProjectJob, type VariantGroup, type VariantName, type JobResult, type VariantRequest } from './project';
 import { AskAgent } from './AskAgent';
 import { JobFeedback } from './JobFeedback';
 import { CopyButton } from './CopyButton';
-import { Icon } from './Icon';
 
 const labels = {
   eyes_closed: 'eyesClosed', eyes_half: 'eyesHalf', eyes_smile: 'eyesSmile', eyes_sad: 'eyesSad', eyes_surprise: 'eyesSurprise',
@@ -19,12 +19,11 @@ export function VariantsPanel({ project, projectPath, assets, rootPath, busy, st
   const [present, setPresent] = useState<string[]>([]), [requests, setRequests] = useState<VariantRequest[]>([]);
   const [eyes, setEyes] = useState(false), [expression, setExpression] = useState(false), [mouth, setMouth] = useState(false);
   const target = ([['eyes', eyes], ['expression', expression], ['mouth', mouth]] as const).filter(([, on]) => on).map(([group]) => group);
-  const panel = useRef<HTMLDetailsElement>(null), mouthCheckbox = useRef<HTMLInputElement>(null);
+  const panel = useRef<HTMLElement>(null);
   useEffect(() => {
     if (!mouthRequest) return;
     setMouth(true);
-    if (panel.current) { panel.current.open = true; panel.current.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
-    mouthCheckbox.current?.focus({ preventScroll: true });
+    panel.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   }, [mouthRequest]);
   const [error, setError] = useState<ProjectJobError | null>(null), [log, setLog] = useState(''), [accepted, setAccepted] = useState(false), [notice, setNotice] = useState('');
   const [lastAction, setLastAction] = useState<ProjectJob>('variant-requests');
@@ -59,32 +58,30 @@ export function VariantsPanel({ project, projectPath, assets, rootPath, busy, st
     const value = present.filter(name => groupOf(name) === group).length;
     return value ? t.variantCount.replace('COUNT', String(value)).replace('TOTAL', String(variantGroups[group].length)) : t.variantMissing;
   };
-  return <details ref={panel} className="panel variants-panel" data-testid="variants-panel" open>
-    <summary><Icon name="brush" />{t.variantsTitle}</summary>
+  return <section ref={panel} className="variants-panel" data-testid="variants-panel"><h3>{t.variantsTitle}</h3>
     <div className="variants-content"><p>{t.variantsHelp}</p>
       <div className="variant-choices">
-        <label><input type="checkbox" checked={eyes} onChange={event => setEyes(event.target.checked)} aria-label={t.targetEyes} /><span>{t.targetEyes}<small>{t.eyesKinds}</small></span><span className="variant-count">{count('eyes')}</span></label>
-        <label><input type="checkbox" checked={expression} onChange={event => setExpression(event.target.checked)} aria-label={t.targetExpression} /><span>{t.targetExpression}<small>{t.expressionKinds}</small></span><span className="variant-count">{count('expression')}</span></label>
-        <label><input ref={mouthCheckbox} type="checkbox" checked={mouth} onChange={event => setMouth(event.target.checked)} aria-label={t.targetMouth} /><span>{t.targetMouth}<small>{t.mouthKinds}</small></span><span className="variant-count">{count('mouth')}</span></label>
+        <label><CheckInput checked={eyes} onChange={event => setEyes(event.target.checked)} aria-label={t.targetEyes} /><span>{t.targetEyes}<small>{t.eyesKinds}</small></span><span className="variant-count">{count('eyes')}</span></label>
+        <label><CheckInput checked={expression} onChange={event => setExpression(event.target.checked)} aria-label={t.targetExpression} /><span>{t.targetExpression}<small>{t.expressionKinds}</small></span><span className="variant-count">{count('expression')}</span></label>
+        <label><CheckInput checked={mouth} onChange={event => setMouth(event.target.checked)} aria-label={t.targetMouth} /><span>{t.targetMouth}<small>{t.mouthKinds}</small></span><span className="variant-count">{count('mouth')}</span></label>
       </div>
       {target.length > 0 && projectPath && (projectPath.startsWith('<') ? <p className="workflow-note">{t.agentUnknownPath}</p> : <AskAgent rootPath={rootPath} projectPath={project?.readOnly || projectPath === 'samples/miko-qipao' ? 'projects/miko-qipao-variants' : projectPath} readOnlySource={project?.readOnly || projectPath === 'samples/miko-qipao' ? projectPath : undefined} target={target} />)}
-      <details className="manual-variants"><summary>{t.manualVariants}</summary>
+      <Disclosure className="manual-variants" title={t.manualVariants}>
         <p>{t.manualHelp}</p>
-        {writable ? <button disabled={busy || stale} onClick={() => { void run('variant-requests'); }}>{busy ? t.operationBusy : t.createRequests}</button> : <p className="workflow-note">{t.variantsUnavailable}</p>}
+        {writable ? <Button disabled={busy || stale} onClick={() => { void run('variant-requests'); }}>{busy ? t.operationBusy : t.createRequests}</Button> : <p className="workflow-note">{t.variantsUnavailable}</p>}
         {stale && <p className="workflow-note">{t.variantsNeedRebuild}</p>}
-      {requests.length > 0 && <div className="variant-requests">{requests.filter(request => !target.length || target.includes(groupOf(request.name)!)).map(request => <details key={request.name}>
-        <summary>{t[labels[request.name]]} · <code>{request.name}.png</code></summary>
+      {requests.length > 0 && <div className="variant-requests">{requests.filter(request => !target.length || target.includes(groupOf(request.name)!)).map(request => <Disclosure key={request.name} title={<>{t[labels[request.name]]} · <code>{request.name}.png</code></>}>
         <img src={request.maskUrl} alt={`${t.requestFiles}: ${t[labels[request.name]]}`} />
         <p><code>{project?.relativePath}/source.png</code><br /><code>{project?.relativePath}/variant-requests/{request.name}/mask.png</code></p>
         <div className="workflow-buttons"><CopyButton value={request.prompt} label={t.copyVariantPrompt} /><CopyButton value={`${project?.relativePath}/source.png\n${project?.relativePath}/variant-requests/${request.name}/mask.png\n${project?.relativePath}/variant-requests/${request.name}/prompt.md`} label={t.copyFilePaths} /></div>
         <pre>{request.prompt}</pre><p>{t.variantOutput}: <code>{project?.relativePath}/variants/{request.name}.png</code></p>
-      </details>)}</div>}
+      </Disclosure>)}</div>}
       {writable && <div className="variant-drop" data-testid="variant-drop" aria-disabled={busy || stale} onDragOver={event => { event.preventDefault(); event.stopPropagation(); }} onDrop={event => { event.preventDefault(); event.stopPropagation(); if (!busy && !stale) void run('import-variants', Array.from(event.dataTransfer.files)); }}>
-        <strong>{t.dropVariants}</strong><p>{t.variantFilenameHelp}</p><button disabled={busy || stale} onClick={() => input.current?.click()}>{t.chooseVariants}</button>
+        <strong>{t.dropVariants}</strong><p>{t.variantFilenameHelp}</p><Button disabled={busy || stale} onClick={() => input.current?.click()}>{t.chooseVariants}</Button>
         <input ref={input} hidden multiple type="file" accept=".png,image/png" aria-label={t.variantFiles} disabled={busy || stale} onChange={event => { if (event.target.files) void run('import-variants', Array.from(event.target.files)); event.target.value = ''; }} />
       </div>}
-      </details>
+      </Disclosure>
       {notice && <p role="status">{notice}</p>}<JobFeedback error={error} log={log} accepted={accepted} importing={lastAction === 'import-variants'} />
     </div>
-  </details>;
+  </section>;
 }

@@ -1,3 +1,4 @@
+import { Disclosure } from '../studio/Controls';
 import type { Rig } from 'mesh-avatar';
 import { getAt } from './model';
 import { NumericField } from './NumericField';
@@ -18,6 +19,6 @@ export function RigFields({ rig, path, scope = path, onChange }: {
     </div><small>{path}</small></div>;
   }
   const children = Object.entries(value).map(([key]) => <RigFields key={key} rig={rig} path={`${path}.${key}`} scope={scope} onChange={onChange} />);
-  if (Array.isArray(value)) return <details open={path === 'eyes' || path === 'strands'}><summary>{label} ({value.length})</summary><div className="fields">{children}</div></details>;
+  if (Array.isArray(value)) return <Disclosure defaultOpen={path === 'eyes' || path === 'strands'} title={<>{label} ({value.length})</>}><div className="fields">{children}</div></Disclosure>;
   return <>{children}</>;
 }

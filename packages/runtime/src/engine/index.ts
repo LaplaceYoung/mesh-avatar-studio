@@ -3,6 +3,7 @@ import type { Rig } from '../rig/types';
 import { parseRig } from '../rig/validate';
 import { createMeshAvatarImpl } from './createMeshAvatar.js';
 import { OVERLAY_EXPRESSIONS } from './expression-overlay.js';
+import type { LipSyncSettings } from './lip-sync';
 
 export type LiveExpression = keyof typeof OVERLAY_EXPRESSIONS;
 export const LIVE_EXPRESSIONS = Object.keys(OVERLAY_EXPRESSIONS) as LiveExpression[];
@@ -18,6 +19,7 @@ export interface MeshAvatarOptions {
   padSide?: number;
   fit?: 'contain' | 'cover';
   preserveMouthForm?: boolean;
+  lipSync?: LipSyncSettings;
 }
 export interface MeshAvatar {
   readonly motions: { id: string; label: string; idle: boolean }[];
@@ -26,6 +28,8 @@ export interface MeshAvatar {
   setParameters(parameters: Record<string, number>, weight?: number): void;
   getParameters(): Record<string, number>;
   setVoiceLevel(value: number): void;
+  /** Partial mouth-movement settings; omitted fields retain their current values. */
+  setLipSync(settings: LipSyncSettings): void;
   setSpeaking(on: boolean): void;
   setEmotion(tag: string | null, options?: { playMotion?: boolean }): void;
   setExpression(name: LiveExpression): void;

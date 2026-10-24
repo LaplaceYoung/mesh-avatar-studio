@@ -22,6 +22,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const [status, setStatus] = useState('idle');
   const [pendingCreation, setPendingCreation] = useState<{ prompt: string; projectName: string; source: string }>();
   const pendingRef = useRef<typeof pendingCreation>(undefined);
+  const productionTurn = useRef(false);
   const [config, setConfig] = useState<SessionConfigOption[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]), [permissions, setPermissions] = useState<Permission[]>([]);
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
@@ -58,7 +59,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
     // Consume before sending. Reconnection must not silently duplicate a creation request.
-    pendingRef.current = undefined; setPendingCreation(undefined); setStatus('working');
+    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; setStatus('working');
     socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));
     pinned.current = true;
   }, [status, pendingCreation]);
@@ -77,7 +78,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
         // ACP completion means the turn ended, not that visual approval exists.
         // Refresh through the existing dirty-state guard so disk changes become
         // visible without replacing unsaved editor work silently.
-        window.setTimeout(onRefresh, 400);
+        if (productionTurn.current) { productionTurn.current = false; window.setTimeout(onRefresh, 400); }
       }
       if (event.type === 'permission' && event.id && event.options) setPermissions(items => [...items.filter(p => p.id !== event.id), event as Permission]);
       if (event.type === 'permission_resolved') setPermissions(items => items.filter(p => p.id !== event.id));
@@ -144,7 +145,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       <Sender value={draft} onChange={setDraft} disabled={!active} loading={status === 'working'} onCancel={() => send({ type: 'cancel' })} placeholder={zh ? '描述任务…' : 'Describe a task…'} autoSize={{ minRows: 2, maxRows: 6 }} onSubmit={value => {
         if (!value.trim() || status !== 'ready') return;
         const text = (context ? `Project: ${project}\nSelected part: ${selection ?? 'none'}\nUnsaved editor changes may not be on disk. Follow AGENTS.md. Never send images to external services without user consent.\n\n` : '') + value;
-        if (send({ type: 'prompt', text })) { setDraft(''); setStatus('working'); pinned.current = true; }
+        if (send({ type: 'prompt', text })) { productionTurn.current = false; setDraft(''); setStatus('working'); pinned.current = true; }
       }} />
       <small className="muted">{zh ? '真实 ACP 会话 · 工具授权在此确认 · 文件更新后刷新项目' : 'Native ACP session · Review permissions here · Refresh after file changes'}</small>
     </div>

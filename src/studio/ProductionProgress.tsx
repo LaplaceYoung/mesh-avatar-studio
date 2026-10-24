@@ -1,7 +1,7 @@
 import { PoseReview } from './PoseReview';
 import { readPreference, savePreference } from '../editor/preferences';
 import { useEffect, useState } from 'react';
-import { Alert, Button, Collapse, Space, Tag } from 'antd';
+import { Alert, Button, Collapse, Space, Steps, Tag } from 'antd';
 import type { CreationTask, ProductionStatus } from '../shared/production';
 import { useI18n } from '../editor/i18n';
 
@@ -37,6 +37,8 @@ export function ProductionProgress() {
   if (!task) return null;
   const titles = zh ? { source: '原图', regions: '区域观察', draft: '绑定草稿', rig: '正式绑定', layers: '图层文件', review: '姿态审查图' } : { source: 'Source', regions: 'Regions', draft: 'Draft rig', rig: 'Final rig', layers: 'Layer files', review: 'Pose images' };
   const nextStage = status?.stages.find(stage => stage.id !== 'source' && stage.state !== 'observed');
+  const orderedStages = status?.stages ?? [];
+  const activeIndex = orderedStages.findIndex(stage => stage.state !== 'observed');
   const resume = () => {
     if (!status || !nextStage) return;
     const tasks: Record<Exclude<typeof nextStage.id, 'source'>, string> = {
@@ -51,6 +53,7 @@ export function ProductionProgress() {
   };
   return <div className="production-progress"><Collapse ghost defaultActiveKey={['production']} items={[{ key: 'production', label: <Space><strong>{zh ? '制作产物' : 'Production artifacts'}</strong><small>{task.projectName}</small></Space>, children: <>
     {error && <Alert type="warning" title={error} />}
+    {status && <Steps className="production-steps" size="small" responsive={false} current={activeIndex < 0 ? orderedStages.length : activeIndex} items={orderedStages.map(stage => ({ title: titles[stage.id], status: stage.state === 'invalid' ? 'error' : stage.state === 'observed' ? 'finish' : 'process' }))} />}
     <div className="production-stages">{status?.stages.map(stage => <div key={stage.id}>
       <span>{titles[stage.id]}</span><Tag color={stage.state === 'invalid' ? 'warning' : stage.state === 'observed' ? 'green' : undefined}>{stage.state === 'observed' ? zh ? '已生成' : 'Present' : stage.state === 'invalid' ? zh ? '需检查' : 'Check' : zh ? '未生成' : 'Missing'}</Tag>
       {stage.issues.length > 0 && <small>{stage.issues.join(' · ')}</small>}

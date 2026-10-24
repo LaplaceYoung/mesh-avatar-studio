@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Button, Space } from 'antd';
 import { CodeOutlined, MinusOutlined, ExpandOutlined, CompressOutlined } from '@ant-design/icons';
 import { useI18n } from '../editor/i18n';
@@ -19,6 +19,7 @@ function readSettings(): WindowSettings {
 export function AgentWindow({ open, onOpenChange, status, children }: { open: boolean; onOpenChange(open: boolean): void; status?: string; children: ReactNode }) {
   const { language } = useI18n();
   const zh = language === 'zh';
+  const titleId = useId();
   const [settings] = useState(readSettings);
   const [expanded, setExpanded] = useState(settings.expanded ?? false);
   const [position, setPosition] = useState<{ x: number; y: number } | undefined>(settings.position);
@@ -43,8 +44,10 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
   useEffect(() => {
     const keepInViewport = () => {
       if (!position || expanded) return;
-      const width = size?.width ?? 620, height = size?.height ?? 650;
-      setPosition({ x: Math.max(8, Math.min(innerWidth - width - 8, position.x)), y: Math.max(8, Math.min(innerHeight - height - 8, position.y)) });
+      const width = Math.min(size?.width ?? 620, Math.max(280, innerWidth - 16));
+      const height = Math.min(size?.height ?? 650, Math.max(240, innerHeight - 16));
+      const next = { x: Math.max(8, Math.min(Math.max(8, innerWidth - width - 8), position.x)), y: Math.max(8, Math.min(Math.max(8, innerHeight - height - 8), position.y)) };
+      if (next.x !== position.x || next.y !== position.y) setPosition(next);
     };
     window.addEventListener('resize', keepInViewport);
     return () => window.removeEventListener('resize', keepInViewport);
@@ -79,7 +82,7 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
       Agent{statusLabel && <span className="agent-launcher-status">{statusLabel}</span>}
     </Button>}
     <section ref={windowRef} className={`agent-window${expanded ? ' agent-window-expanded' : ''}`} hidden={!open}
-      aria-label={zh ? 'Agent 对话窗口' : 'Agent conversation window'}
+      role="dialog" aria-modal="false" aria-labelledby={titleId} aria-label={zh ? 'Agent 对话窗口' : 'Agent conversation window'}
       style={style}>
       <header ref={titlebarRef} tabIndex={-1} className="agent-window-titlebar"
         onPointerDown={event => {
@@ -95,7 +98,7 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
             y: Math.max(8, Math.min(innerHeight - rect.height - 8, drag.current.top + event.clientY - drag.current.y)) });
         }}
         onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-        <Space><CodeOutlined /><strong>{zh ? '创作助手' : 'Creative assistant'}</strong>{statusLabel && <span className={`agent-window-status agent-window-status-${status}`}>{statusLabel}</span>}</Space>
+        <Space><CodeOutlined /><strong id={titleId}>{zh ? '创作助手' : 'Creative assistant'}</strong>{statusLabel && <span className={`agent-window-status agent-window-status-${status}`} role="status">{statusLabel}</span>}</Space>
         <Space size={2}>
           <Button type="text" size="small" icon={expanded ? <CompressOutlined /> : <ExpandOutlined />} aria-label={zh ? '切换窗口大小' : 'Toggle window size'} onClick={() => setExpanded(value => !value)} />
           <Button type="text" size="small" icon={<MinusOutlined />} aria-label={zh ? '收起 Agent 对话' : 'Minimize agent conversation'} onClick={() => onOpenChange(false)} />

@@ -66,18 +66,28 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
       for (const entry of await readdir(work)) if (/^vision-[a-f0-9]{12}$/.test(entry)) {
         const candidate = join(work, entry, 'manifest.json');
         try {
-          const manifest = JSON.parse(await readFile(candidate, 'utf8')) as { sourceSha256?: unknown; sourceSize?: unknown; regions?: unknown };
-          if (manifest.sourceSha256 === expectedHash && Array.isArray(manifest.sourceSize) && manifest.sourceSize[0] === source?.width && manifest.sourceSize[1] === source?.height && Array.isArray(manifest.regions) && manifest.regions.length === regions.length) evidence = candidate;
+          const manifest = JSON.parse(await readFile(candidate, 'utf8')) as { sourceSha256?: unknown; sourceSize?: unknown; status?: unknown; regions?: unknown };
+          const manifestRegions = manifest.regions;
+          const exactRegions = Array.isArray(manifestRegions) && manifestRegions.length === regions.length && regions.every((region, index) => {
+            const item = manifestRegions[index];
+            if (!item || typeof item !== 'object') return false;
+            const candidate = item as { name?: unknown; box?: unknown; step?: unknown; observation?: unknown; confidence?: unknown };
+            return candidate.name === region.name && JSON.stringify(candidate.box) === JSON.stringify(region.box) && candidate.step === (region.step ?? 5) && candidate.observation === region.observation && candidate.confidence === region.confidence;
+          });
+          if (manifest.sourceSha256 === expectedHash && manifest.status === 'proposals-require-visual-review' && Array.isArray(manifest.sourceSize) && manifest.sourceSize[0] === source?.width && manifest.sourceSize[1] === source?.height && exactRegions) evidence = candidate;
         } catch { /* Ignore incomplete evidence folders and inspect the next one. */ }
       }
     } catch (error) { if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error; }
     if (!evidence) throw new Error('No evidence manifest matches the current source hash and regions. Run tools/vision-regions.py again.');
+    const evidenceFolder = evidence.slice(0, evidence.length - `${sep}manifest.json`.length);
     const manifest = JSON.parse(await readFile(evidence, 'utf8')) as { regions: { detail?: unknown; grid?: unknown }[] };
     result.files.push(evidence.replace(project + sep, ''));
+    await png(`${evidenceFolder.replace(project + sep, '')}/overview.png`, result);
     for (const region of manifest.regions) {
       if (typeof region.detail !== 'string' || typeof region.grid !== 'string') throw new Error('Evidence manifest is missing a detail or grid image.');
-      await png(`work/${evidence.split(`${sep}work${sep}`)[1].split(sep)[0]}/${region.detail}`, result);
-      await png(`work/${evidence.split(`${sep}work${sep}`)[1].split(sep)[0]}/${region.grid}`, result);
+      if (!/^[A-Za-z][A-Za-z0-9_-]{0,48}-(detail|grid)\.png$/.test(region.detail) || !/^[A-Za-z][A-Za-z0-9_-]{0,48}-(detail|grid)\.png$/.test(region.grid)) throw new Error('Evidence manifest contains an invalid crop filename.');
+      await png(`${evidenceFolder.replace(project + sep, '')}/${region.detail}`, result);
+      await png(`${evidenceFolder.replace(project + sep, '')}/${region.grid}`, result);
     }
   });
   for (const id of ['draft', 'rig'] as const) await stage(id, async result => {

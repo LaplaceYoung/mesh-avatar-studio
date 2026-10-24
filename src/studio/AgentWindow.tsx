@@ -24,6 +24,8 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
   const [position, setPosition] = useState<{ x: number; y: number } | undefined>(settings.position);
   const [size, setSize] = useState<{ width: number; height: number } | undefined>(settings.size);
   const windowRef = useRef<HTMLElement>(null);
+  const titlebarRef = useRef<HTMLElement>(null);
+  const launcherRef = useRef<HTMLButtonElement>(null);
   const drag = useRef<{ x: number; y: number; left: number; top: number } | null>(null);
   useEffect(() => {
     savePreference(SETTINGS_KEY, JSON.stringify({ expanded, position, size } satisfies WindowSettings));
@@ -47,6 +49,23 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
     window.addEventListener('resize', keepInViewport);
     return () => window.removeEventListener('resize', keepInViewport);
   }, [expanded, position, size]);
+  useEffect(() => {
+    if (open) {
+      titlebarRef.current?.focus();
+      return;
+    }
+    launcherRef.current?.focus();
+  }, [open]);
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      event.preventDefault();
+      onOpenChange(false);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [onOpenChange, open]);
   const desktopLayout = typeof window === 'undefined' || window.innerWidth > 600;
   const style = !expanded && desktopLayout ? { ...(position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : {}), ...(size ? { width: size.width, height: size.height } : {}) } : undefined;
   const statusLabels: Record<string, [string, string]> = {
@@ -56,13 +75,13 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
   const statusLabel = status ? statusLabels[status]?.[zh ? 0 : 1] ?? status : '';
   const active = status === 'starting' || status === 'working' || status === 'configuring';
   return <>
-    {!open && <Button className={`agent-launcher${active ? ' agent-launcher-active' : ''}`} type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-label={zh ? `展开 Agent 对话${statusLabel ? `，${statusLabel}` : ''}` : `Open agent conversation${statusLabel ? `, ${statusLabel}` : ''}`}>
+    {!open && <Button ref={launcherRef} className={`agent-launcher${active ? ' agent-launcher-active' : ''}`} type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-label={zh ? `展开 Agent 对话${statusLabel ? `，${statusLabel}` : ''}` : `Open agent conversation${statusLabel ? `, ${statusLabel}` : ''}`}>
       Agent{statusLabel && <span className="agent-launcher-status">{statusLabel}</span>}
     </Button>}
     <section ref={windowRef} className={`agent-window${expanded ? ' agent-window-expanded' : ''}`} hidden={!open}
       aria-label={zh ? 'Agent 对话窗口' : 'Agent conversation window'}
       style={style}>
-      <header className="agent-window-titlebar"
+      <header ref={titlebarRef} tabIndex={-1} className="agent-window-titlebar"
         onPointerDown={event => {
           if (expanded || event.button !== 0 || (event.target as HTMLElement).closest('button')) return;
           const rect = windowRef.current!.getBoundingClientRect();

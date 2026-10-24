@@ -21,7 +21,7 @@ small,.muted { color:var(--studio-muted); }
 .studio-project-name { display:flex; align-items:center; gap:12px; flex:1; min-width:60px; font-size:12px; }
 .studio-project-name strong { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .studio-actions { display:flex; align-items:center; flex-wrap:wrap; gap:6px; justify-content:flex-end; }
-.studio-body { flex:1; min-height:0; }
+.studio-body { flex:1; min-height:0; min-width:0; overflow:hidden; }
 .studio-status { min-height:30px; font-size:11px; display:flex; justify-content:space-between; align-items:center; gap:16px; padding:0 16px; border-top:1px solid var(--studio-line); background:var(--studio-surface); }
 .status-dot { display:inline-block; background:#518061; width:6px; height:6px; border-radius:50%; }
 .studio-status [data-testid="project-location"] { max-width:280px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; display:inline-block; vertical-align:middle; }
@@ -114,12 +114,13 @@ small,.muted { color:var(--studio-muted); }
 @media(prefers-reduced-motion:reduce) { *,*::before,*::after { scroll-behavior:auto!important; animation-duration:.01ms!important; transition-duration:.01ms!important; } }
 .agent-window { position:fixed; z-index:50; right:20px; bottom:46px; width:min(620px,calc(100vw - 32px)); height:min(650px,calc(100dvh - 112px)); min-width:340px; min-height:300px; max-width:calc(100vw - 16px); max-height:calc(100dvh - 32px); display:flex; flex-direction:column; resize:both; overflow:hidden; border:1px solid var(--studio-line); border-radius:12px; background:var(--studio-surface); box-shadow:0 16px 60px #0003; }
 .agent-window-expanded { inset:88px 24px 46px!important; width:auto; height:auto; resize:none; }
-.agent-window-titlebar { display:flex; align-items:center; justify-content:space-between; flex-shrink:0; padding:8px 12px; border-bottom:1px solid var(--studio-line); cursor:move; touch-action:none; user-select:none; font-size:12px; }
+.agent-window-titlebar { display:flex; align-items:center; justify-content:space-between; flex-shrink:0; padding:8px 12px; border-bottom:1px solid var(--studio-line); cursor:move; touch-action:none; user-select:none; font-size:12px; outline:none; }
+.agent-window-titlebar:focus-visible { box-shadow:inset 0 0 0 2px var(--studio-accent); }
 .agent-window-status { color:var(--studio-muted); font-size:10px; }.agent-window-status-working,.agent-window-status-starting { color:var(--studio-accent); }.agent-window-status-ready { color:#518061; }
 .agent-window-body { flex:1; min-height:0; overflow:hidden; }.agent-window .agent-dock { border:0; }.agent-window .agent-toolbar { flex-wrap:wrap; gap:8px; padding:10px 12px; }.agent-window .agent-composer { padding:8px 12px 12px; }.agent-window .agent-toolbar .ant-space { flex-wrap:wrap; }
 .agent-launcher { position:fixed; z-index:40; right:24px; bottom:48px; box-shadow:0 4px 20px #0002; }.agent-launcher-status { margin-left:6px; font-size:10px; opacity:.85; }.agent-launcher-active::after { content:""; position:absolute; top:5px; right:5px; width:7px; height:7px; border-radius:50%; background:#f5c451; box-shadow:0 0 0 3px #f5c45144; animation:agent-pulse 1.6s ease-in-out infinite; }
 @keyframes agent-pulse { 0%,100% { opacity:.55; transform:scale(.85); } 50% { opacity:1; transform:scale(1.15); } }
-@media(max-width:600px) { .agent-window { inset:auto 8px 38px!important; width:calc(100vw - 16px); min-width:0; height:72dvh; resize:none; }.agent-window-expanded { top:8px!important; height:auto; }.agent-launcher { right:16px; } }
+@media(max-width:600px) { .agent-window { inset:auto 8px max(38px, env(safe-area-inset-bottom))!important; width:calc(100vw - 16px); min-width:0; height:min(72dvh, calc(100dvh - 54px)); max-height:calc(100dvh - 24px); resize:none; }.agent-window-expanded { top:max(8px, env(safe-area-inset-top))!important; bottom:max(8px, env(safe-area-inset-bottom))!important; height:auto; }.agent-launcher { right:16px; bottom:max(48px, calc(16px + env(safe-area-inset-bottom))); } }
 .agent-conversation { flex:1; min-height:60px; overflow:auto; padding:16px; overscroll-behavior:contain; }
 .agent-message { margin-bottom:18px; font-size:13px; line-height:1.7; }.agent-message>small { display:block; font-size:10px; margin-bottom:5px; }.agent-message>div { white-space:pre-wrap; overflow-wrap:anywhere; }
 .agent-message-user { padding:10px 12px; margin-left:32px; border-radius:8px; background:var(--studio-inset); border:1px solid var(--studio-line); }.agent-message-plan { border-left:2px solid var(--studio-accent); padding-left:10px; }

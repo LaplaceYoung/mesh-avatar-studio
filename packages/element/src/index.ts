@@ -92,9 +92,9 @@ export class MeshAvatarElement extends Base {
     this.#lipSync = { ...this.#lipSync, ...updates };
   }
 
-  /** Moves the mouth to Japanese text without audio. Waits for the avatar to load. */
-  async speak(text: string, options?: { speed?: number; loop?: boolean }) {
-    (await this.ready).speakKana(text, options);
+  /** Moves the mouth to Japanese kana or Mandarin text (Hanzi and pinyin) without audio. Waits for the avatar to load. */
+  async speak(text: string, options?: { lang?: 'ja' | 'zh'; speed?: number; loop?: boolean }) {
+    (await this.ready).speak(text, options);
   }
 
   /** Plays a motion by id (see `avatar.motions`). Waits for the avatar to load. */

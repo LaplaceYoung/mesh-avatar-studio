@@ -35,6 +35,7 @@ export interface MeshAvatar {
   setTalkGain(gain: number): void;
   play(id: string): void;
   speakKana(text: string, options?: { speed?: number; loop?: boolean }): void;
+  speak(text: string, options?: { lang?: 'ja' | 'zh'; speed?: number; loop?: boolean }): void;
   holdMouth(vowel: 'a' | 'i' | 'u' | 'e' | 'o' | 'n'): void;
   stopLipSync(): void;
   getLipSyncState(): { active: boolean; open: number; form: number };

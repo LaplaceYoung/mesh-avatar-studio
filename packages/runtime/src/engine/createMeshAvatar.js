@@ -243,6 +243,7 @@ export async function createMeshAvatarImpl(canvas, options) {
     play(id) { if (motion.hasMotion(id)) motion.playMotion(id); },
     /** Move the mouth through the vowels of kana text (no audio; for previews). */
     speakKana(text, options) { motion.speakKana(String(text ?? ''), options); },
+    speak(text, options) { motion.speak(String(text ?? ''), options); },
     holdMouth(vowel) { motion.holdMouth(vowel); },
     stopLipSync() { motion.stopLipSync(); },
     getLipSyncState() { return motion.getLipSyncState(); },

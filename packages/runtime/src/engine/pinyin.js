@@ -1,0 +1,108 @@
+// Mandarin text -> timed mouth shapes, for previewing lip sync without audio.
+// Han characters go through a small frequency-ordered map (see pinyin-map.js, derived from the
+// kHanyuPinlu table with tone marks stripped, ü written "v"). Characters not covered by the map
+// show up via skippedPinyinCharacters, mirroring the Japanese path.
+import { VOWELS } from './kana.js';
+import { PINYIN_MAP_COMPACT } from './pinyin-map.js';
+
+// Parsed lazily so consumers that never use Mandarin do not parse ~28 KB of compact data.
+let PINYIN;
+function pinyinMap() {
+  if (!PINYIN) {
+    PINYIN = new Map();
+    for (const entry of PINYIN_MAP_COMPACT.split(',')) PINYIN.set(entry[0], entry.slice(1));
+  }
+  return PINYIN;
+}
+
+// Onset groups by articulation:
+//   lips      — b, p, m, f, w: mouth closes or rounds first
+//   alveolar  — d, t, n, l, z, c, s: tongue-ridge stop, slight narrowing
+//   retroflex — zh, ch, sh, r: tongue curled, corners open like /u/
+//   palatal   — j, q, x, y: i-quality onglide, wide smile
+//   velar     — g, k, h: neutral, no extra lip work
+const ONSET_LIPS = new Set(['b', 'p', 'm', 'f', 'w']);
+const ONSETS = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', 'k', 'h', 'j', 'q', 'x', 'y', 'w', 'z', 'c', 's', 'r'];
+// Multi-char finals first so the regex above matches longest first.
+const FINALS = ['iang', 'iong', 'uang', 'ueng', 'uan', 'ian', 'ang', 'eng', 'ing', 'ong',
+  'iao', 'uai', 'van', 'vn', 'ua', 'uo', 'ia', 'ie', 'iu', 'in', 'ai', 'ei', 'ao', 'ou',
+  'un', 'en', 'an', 've', 'er', 'a', 'o', 'e', 'i', 'u', 'v'];
+// dominant vowel target for each final — see VOWELS for the shape each key holds
+const FINAL_SHAPE = {
+  a: ['a', null], ai: ['a', null], an: ['a', null], ang: ['a', null], ao: ['a', null],
+  o: ['o', null], ong: ['o', null], ou: ['o', null],
+  e: ['e', null], ei: ['e', null], en: ['e', null], eng: ['e', null], er: ['e', 'r'],
+  i: ['i', null], ia: ['a', 'i'], ie: ['e', 'i'], iao: ['a', 'i'], iu: ['u', 'i'],
+  ian: ['e', 'i'], in: ['i', 'i'], iang: ['a', 'i'], ing: ['i', 'i'], iong: ['o', 'i'],
+  u: ['u', null], ua: ['a', 'u'], uo: ['o', 'u'], uai: ['a', 'u'], ui: ['e', 'u'],
+  uan: ['a', 'u'], un: ['e', 'u'], uang: ['a', 'u'], ueng: ['e', 'u'],
+  v: ['v', null], ve: ['e', 'v'], van: ['e', 'v'], vn: ['v', 'v'],
+};
+
+// Extra vowel shapes that kana.js does not know — mapped onto its open/form space.
+VOWELS.v = { open: 0.4, form: 1.0, label: 'ü' };  // rounded /y/, beyond u
+VOWELS.r = { open: 0.35, form: 0.5, label: 'er' };
+
+export function skippedPinyinCharacters(text) {
+  const out = [];
+  const map = pinyinMap();
+  for (const c of text) {
+    if (/\s|，。！？；：、“”‘’（）《》〈〉【】…—,.!?;:'"()\[\]<>-/.test(c)) continue;
+    if (/[a-zA-Z]/.test(c)) continue;     // pinyin syllables pass through
+    if (/[0-9]/.test(c)) { out.push(c); continue; }
+    if (!map.has(c) && !out.includes(c)) out.push(c);
+  }
+  return out;
+}
+
+const PAUSE = new Set([...'、。，．！？；：,.!?;:\u3000…\n\t']);
+const GAP = new Set([...' ']);
+
+function* syllablesFrom(pinyin) {
+  let i = 0;
+  while (i < pinyin.length) {
+    const rest = pinyin.slice(i).toLowerCase();
+    let onset = '';
+    for (const o of ONSETS) if (rest.startsWith(o) && rest.length > o.length) { onset = o; break; }
+    const tail = rest.slice(onset.length);
+    let final = '';
+    for (const f of FINALS) if (tail.startsWith(f)) { final = f; break; }
+    if (!final) return;                  // unknown trailing letters — ignore quietly
+    yield { onset, final };
+    i += (onset + final).length;
+  }
+}
+
+function pushSyllables(out, latin, mora) {
+  for (const { onset, final } of syllablesFrom(latin)) {
+    const nasal = /n$|ng$/.test(final) || final === 'vn';
+    const shape = FINAL_SHAPE[final] ?? ['a', null];
+    out.push({ vowel: shape[0], dur: mora, onset: ONSET_LIPS.has(onset) ? 'lips' : onset ? 'consonant' : null, nasal, glide: shape[1] });
+  }
+}
+
+/** Hanzi + pinyin mixed text -> [{ vowel, dur, onset }]. */
+export function pinyinToMoras(text, mora = 0.14) {
+  const out = [];
+  const map = pinyinMap();
+  let latin = '';
+  const flush = () => {
+    if (!latin.trim()) { latin = ''; return; }
+    for (const word of latin.trim().split(/\s+/)) pushSyllables(out, word, mora);
+    latin = '';
+  };
+  for (const c of text) {
+    if (PAUSE.has(c)) {
+      flush();
+      out.push({ vowel: 'n', dur: mora * 1.6, onset: null, nasal: false, glide: null });
+      continue;
+    }
+    if (GAP.has(c)) { latin += ' '; continue; }
+    if (/[a-zA-Z]/.test(c)) { latin += c; continue; }
+    flush();
+    const p = map.get(c);
+    if (p) pushSyllables(out, p, mora);
+  }
+  flush();
+  return out;
+}

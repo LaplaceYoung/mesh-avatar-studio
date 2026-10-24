@@ -3,6 +3,7 @@ import { resolveLipSync, lipMotionOptions } from './lip-sync.ts';
 import { PARAMS } from './rig.js';
 import { MOTIONS, IDLE_MOTIONS, ADDITIVE, sampleTrack } from './motions.js';
 import { VOWELS, kanaToMoras, sampleMoras } from './kana.js';
+import { pinyinToMoras } from './pinyin.js';
 
 const ALL_MOTIONS = { ...MOTIONS, ...IDLE_MOTIONS };
 // scales the head / body / arm tracks of idle motions (they are authored at full size, so 1)
@@ -135,6 +136,15 @@ export class Motion {
   speakKana(text, { speed, loop = false } = {}) {
     this.lipHold = null;
     const moras = kanaToMoras(text, speed === undefined ? 0.14 : 1 / clamp(Number(speed) || 7, 4, 12));
+    this.kana = moras.length ? { moras, t: 0, loop, duration: moras.reduce((sum, m) => sum + m.dur, 0) } : null;
+  }
+
+  /** Mouth shapes for Japanese kana or Mandarin pinyin/Hanzi text. */
+  /** @param {string} text @param {{ lang?: 'ja' | 'zh', speed?: number, loop?: boolean }} [options] */
+  speak(text, { lang = 'ja', speed, loop = false } = {}) {
+    const converter = lang === 'zh' ? pinyinToMoras : lang === 'ja' ? kanaToMoras : kanaToMoras;
+    this.lipHold = null;
+    const moras = converter(text, speed === undefined ? 0.14 : 1 / clamp(Number(speed) || 7, 4, 12));
     this.kana = moras.length ? { moras, t: 0, loop, duration: moras.reduce((sum, m) => sum + m.dur, 0) } : null;
   }
 

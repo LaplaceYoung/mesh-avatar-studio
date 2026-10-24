@@ -4,6 +4,7 @@ import { loadLighting, saveLighting } from '../lighting/storage';
 import { useEffect, useRef, useState } from 'react';
 import { createMeshAvatar, type MeshAvatar, PARAMS, type Rig, type LipSyncSettings as AudioSettings } from 'mesh-avatar';
 import { VOWELS, skippedKanaCharacters } from '../../packages/runtime/src/engine/kana.js';
+import { skippedPinyinCharacters } from '../../packages/runtime/src/engine/pinyin.js';
 import { useI18n } from './i18n';
 import { Icon } from './Icon';
 import { openSampleAvatar } from './project';
@@ -18,7 +19,9 @@ const sliders = [
   { id: 'bodyAngleZ', label: 'bodyTilt', min: -10, max: 10, def: 0 },
 ] as const;
 type Vowel = 'a' | 'i' | 'u' | 'e' | 'o' | 'n';
-type Lip = { kind: 'hold'; vowel: Vowel } | { kind: 'text'; text: string; speed: number; loop: boolean; source: 'user' | 'sample' } | null;
+type LipLanguage = 'ja' | 'zh';
+type Lip = { kind: 'hold'; vowel: Vowel } | { kind: 'text'; lang: LipLanguage; text: string; speed: number; loop: boolean; source: 'user' | 'sample' } | null;
+const sampleText: Record<LipLanguage, string> = { ja: 'あいうえお、こんにちは', zh: '你好，我现在很好' };
 export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, hasMouthSprites, onDrawMouth }: { projectKey: string; rig: Rig; assets?: Record<string, string>; lipSync?: AudioSettings; onLipSyncChange(value: AudioSettings): void; hasMouthSprites: boolean; onDrawMouth?: () => void }) {
   const { t, language } = useI18n();
   const [lighting, setLighting] = useState(() => loadLighting(projectKey));
@@ -32,13 +35,14 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
   const [parameters, setParameters] = useState<Record<string, number>>({});
   const [audioActive, setAudioActive] = useState(false);
   const [lip, setLip] = useState<Lip>(null);
-  const [text, setText] = useState('あいうえお、こんにちは');
+  const [lipLanguage, setLipLanguage] = useState<LipLanguage>('ja');
+  const [text, setText] = useState(sampleText.ja);
   const [speed, setSpeed] = useState(7);
   const [loop, setLoop] = useState(false);
   const [liveMouth, setLiveMouth] = useState(0);
   const [tab, setTab] = useState<'pose' | 'lip'>('pose');
   const [lightingOpen, setLightingOpen] = useState(false);
-  const skipped = skippedKanaCharacters(text).join(' ');
+  const skipped = (lipLanguage === 'zh' ? skippedPinyinCharacters(text) : skippedKanaCharacters(text)).join(' ');
   const controls = useRef({ idle, stress, parameters });
   controls.current = { idle, stress, parameters };
   useEffect(() => {
@@ -78,7 +82,7 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
     value.setParameters(idle && !stress ? pose : { ...defaults, ...pose });
     value.stopLipSync();
     if (lip?.kind === 'hold') value.holdMouth(lip.vowel);
-    if (lip?.kind === 'text') value.speakKana(lip.text, { speed: lip.speed, loop: lip.loop });
+    if (lip?.kind === 'text') value.speak(lip.text, { lang: lip.lang, speed: lip.speed, loop: lip.loop });
     value.advance(0);
     if (!idle && !stress && !lip && !audioActive) return;
     let raf = 0;
@@ -145,8 +149,12 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
       <button className="sweep-button" title={t.sweepTip} onClick={() => setStress(current => !current)}>{stress ? t.stopSweep : t.sweep}</button></div>
       </div>
       <div className="lip-sync" id="lip-panel" role="tabpanel" aria-labelledby="lip-tab" hidden={tab !== 'lip'}>
-        <div className="lip-text-row"><input aria-label={t.lipText} value={text} onChange={event => setText(event.target.value)} />
-          <button disabled={!text.trim()} onClick={() => setLip({ kind: 'text', text, speed, loop, source: 'user' })}>{t.lipPlay}</button>
+        <div className="lip-text-row">
+          <select aria-label={t.lipLanguage} value={lipLanguage} data-testid="lip-language" onChange={event => { const next = event.target.value as LipLanguage; setLipLanguage(next); setText(sampleText[next]); setLip(null); }}>
+            <option value="ja">{t.lipLanguageJa}</option><option value="zh">{t.lipLanguageZh}</option>
+          </select>
+          <input aria-label={t.lipText} value={text} data-testid="lip-text" onChange={event => setText(event.target.value)} />
+          <button disabled={!text.trim()} onClick={() => setLip({ kind: 'text', lang: lipLanguage, text, speed, loop, source: 'user' })}>{t.lipPlay}</button>
           <button disabled={!lip} onClick={() => setLip(null)}>{t.lipStop}</button>
         </div>
         <div className="sliders lip-live"><label>{t.mouthOpen}<input type="range" aria-label={t.mouthOpen} min="0" max="1" step="0.01" disabled={lip !== null}
@@ -154,7 +162,7 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
         <LipSyncSettings value={lipSync} onChange={onLipSyncChange} avatar={avatar.current} onDemo={() => {
           if (lip?.kind === 'text' && lip.source === 'user') return;
           avatar.current?.stopLipSync();
-          setLip({ kind: 'text', text: 'あいうえお、こんにちは', speed, loop: false, source: 'sample' });
+          setLip({ kind: 'text', lang: lipLanguage, text: sampleText[lipLanguage], speed, loop: false, source: 'sample' });
         }} onPreview={active => { if (active) setLip(null); setAudioActive(active); }} />
         <div className="vowel-buttons" role="group" aria-label={t.lipSync}>
           {(Object.keys(VOWELS) as Vowel[]).map(vowel => <button key={vowel} aria-pressed={lip?.kind === 'hold' && lip.vowel === vowel}
@@ -166,7 +174,7 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
           <label><input type="checkbox" checked={loop} onChange={event => { const value = event.target.checked; setLoop(value); setLip(current => current?.kind === 'text' ? { ...current, loop: value } : current); }} />{t.lipLoop}</label>
         </div>
         {!hasMouthSprites && <p className="mouth-fallback">{t.mouthFallback} {onDrawMouth && <button type="button" onClick={onDrawMouth}>{t.drawMouth}</button>}</p>}
-        <p className="lip-help">{t.lipHelp}</p>{skipped && <p className="lip-skipped">{t.skippedKana} {skipped}</p>}
+        <p className="lip-help">{lipLanguage === 'zh' ? t.lipHelpZh : t.lipHelp}</p>{skipped && <p className="lip-skipped">{t.skippedKana} {skipped}</p>}
 
       </div>
       <details className="lighting-section" data-testid="lighting-section" onToggle={event => setLightingOpen(event.currentTarget.open)}>

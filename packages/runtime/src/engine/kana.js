@@ -60,7 +60,18 @@ export function sampleMoras(moras, t, granularity = 0.5) {
       // consonants: the mouth is nearly shut (lips) or half shut at the start of the mora
       const onset = m.onset === 'lips' ? 0.05 : m.onset === 'consonant' ? 0.45 : 1;
       const k = x < 0.35 ? onset + (1 - onset) * (x / 0.35) : 1;
-      return { open: v.open * k, form: v.form, vowel: m.vowel };
+      // Pinyin nasal finals close the jaw for the second half of the mora; the glide
+      // (e.g. i- or u- initial) narrows the opening in the first half.
+      const nasal = m.nasal && x > 0.55 ? 1 - (x - 0.55) / 0.45 * 0.55 : 1;
+      const glide = m.glide && VOWELS[m.glide] && x < 0.4
+        ? v.open + (VOWELS[m.glide].open - v.open) * (1 - x / 0.4) * 0.4
+        : v.open;
+      // i- or u- initial narrows the mouth during the first 40%: e.g. ia → a but start near i,
+      // van → e with lips already rounded like ü.
+      const form = m.glide && VOWELS[m.glide] && x < 0.4 && v.form !== null && VOWELS[m.glide].form !== null
+        ? VOWELS[m.glide].form + (v.form - VOWELS[m.glide].form) * (x / 0.4)
+        : v.form;
+      return { open: glide * k * nasal, form, vowel: m.vowel };
     }
     start += m.dur;
   }
@@ -86,7 +97,9 @@ function sampleGroupedMoras(moras, t, granularity) {
       const original = m.onset === 'lips' ? 0.05 : m.onset === 'consonant' ? 0.45 : 1;
       const onset = granularity < 0.5 ? 1 - (1 - original) * granularity * 2 : original * (2 - granularity * 2);
       const attack = Math.min(m.dur * 0.35, 0.05), x = (t - start) / attack;
-      return { open: v.open * (x < 1 ? onset + (1 - onset) * x : 1), form: v.form, vowel };
+      const base = x < 1 ? onset + (1 - onset) * x : 1;
+      const nasal = m.nasal && x > 0.55 ? 0.45 : 1;
+      return { open: v.open * base * nasal, form: v.form, vowel };
     }
     start += m.dur;
   }

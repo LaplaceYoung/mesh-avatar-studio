@@ -14,11 +14,20 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
   useEffect(() => { setSelected(''); setIssue(readPreference(key) ?? ''); }, [key]);
   const file = files.includes(selected) ? selected : files.find(file => file.endsWith('contact-sheet.png')) ?? files[0];
   const areas = zh ? { eyes: '眼睛 / 闭眼残留', mouth: '嘴部 / 下巴拉伸', hair: '头发 / 面部遮挡', head: '转头 / 耳朵破损', body: '身体 / 饰品摆动', other: '其他问题' } : { eyes: 'Eyes / blinking', mouth: 'Mouth / chin', hair: 'Hair / face overlap', head: 'Head turn / ears', body: 'Body / accessories', other: 'Other' };
+  const contactSheet = files.find(value => value.endsWith('contact-sheet.png'));
+  const eyesCrop = files.find(value => value.endsWith('-eyes.png'));
+  const mouthCrop = files.find(value => value.endsWith('-mouth.png'));
+  const quickFiles = [
+    { key: 'contact', label: zh ? '总览' : 'Contact sheet', file: contactSheet },
+    { key: 'eyes', label: zh ? '眼部' : 'Eyes crop', file: eyesCrop },
+    { key: 'mouth', label: zh ? '嘴部' : 'Mouth crop', file: mouthCrop },
+  ].filter(item => item.file);
   return <Drawer title={zh ? '姿态审查' : 'Pose review'} placement="right" size="large" open={open} onClose={onClose} destroyOnHidden>
     <div className="pose-review">
       <Space wrap><strong>{project}</strong><Tag>{zh ? '视觉质量尚未验收' : 'Visual quality not approved'}</Tag><Button onClick={() => setRevision(value => value + 1)}>{zh ? '重载图片' : 'Reload images'}</Button></Space>
       {stage?.state === 'invalid' && <Alert type="warning" title={zh ? '审查产物可能不完整或已过时。' : 'Review artifacts may be incomplete or stale.'} description={stage.issues.join(' · ')} />}
       {files.length && file ? <>
+        {quickFiles.length > 0 && <div className="review-quick-filters" role="toolbar" aria-label={zh ? '关键审查证据' : 'Key review evidence'}>{quickFiles.map(item => <Button key={item.key} size="small" type={file === item.file ? 'primary' : 'default'} aria-pressed={file === item.file} onClick={() => setSelected(item.file!)}>{item.label}</Button>)}</div>}
         <Select aria-label={zh ? '审查图片' : 'Review image'} value={file} onChange={setSelected} options={files.map(value => ({ value, label: value.slice('review/'.length) }))} />
         <div className="review-image-stage"><Image src={`/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file.slice('review/'.length))}&revision=${revision}`} alt={`${project} / ${file}`} /></div>
         <small className="muted">{zh ? '点击图片放大。必须同时检查 contact sheet、眼部裁剪和嘴部裁剪，再检查闭眼残留、转头裂缝、嘴部拉伸、头发遮挡；生成图片不等于通过审查。' : 'Inspect the contact sheet, eye crop and mouth crop as well as blink residue, tears, mouth stretching and hair overlap. Rendering is not approval.'}</small>

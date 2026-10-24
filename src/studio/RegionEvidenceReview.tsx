@@ -20,7 +20,7 @@ export function RegionEvidenceReview({ project, stage, open, onClose }: { projec
         <div className="review-image-stage"><Image src={src} alt={`${project} / ${file}`} /></div>
         <small className="muted">{zh ? '先看 overview，再检查眼睛和嘴部的 5 px 网格，以及发际、发束和肩部框。发现偏移后可直接交给 Agent 局部修正。' : 'Start with the overview, then inspect the 5 px eye and mouth grids plus hair and shoulder boxes. Send a targeted correction to the Agent when a box is off.'}</small>
       </> : <Empty description={zh ? '尚无与当前原图匹配的区域证据。' : 'No evidence matches the current source image.'} />}
-      <Button onClick={() => window.dispatchEvent(new CustomEvent('studio:agent-prompt', { detail: `请检查 projects/${project} 的区域证据。当前证据应来自 source.png 的精确 SHA-256；请先打开 work/vision-* 的 overview、眼睛和嘴部 grid，指出实际可见的坐标偏移，再只修正对应 regions.json 和绑定草稿。不要把文件存在当作视觉正确，也不要覆盖无关改动。` }))} disabled={!file}>{zh ? '交给 Agent 复核区域' : 'Ask Agent to review regions'}</Button>
+      <Button onClick={() => window.dispatchEvent(new CustomEvent('studio:agent-start', { detail: { prompt: `请检查 projects/${project} 的区域证据。当前证据应来自 source.png 的精确 SHA-256；请先打开 work/vision-* 的 overview、眼睛和嘴部 grid，指出实际可见的坐标偏移，再只修正对应 regions.json 和绑定草稿。不要把文件存在当作视觉正确，也不要覆盖无关改动。`, projectName: project, source: `projects/${project}/source.png` } }))} disabled={!file}>{zh ? '交给 Agent 复核区域' : 'Ask Agent to review regions'}</Button>
     </div>
   </Drawer>;
 }

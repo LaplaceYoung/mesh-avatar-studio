@@ -27,7 +27,7 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
       <Input.TextArea aria-label={zh ? '具体缺陷' : 'Observed defect'} value={issue} rows={4} placeholder={zh ? '例如：turn-left.png 中左眼角露出白色裂缝，闭眼图仍能看到虹膜。请描述你实际看见的问题。' : 'Describe the defect you can actually see, including the frame and location.'} onChange={event => { setIssue(event.target.value); savePreference(key, event.target.value); }} />
       <Button type="primary" disabled={!issue.trim() || !file} onClick={() => {
         const prompt = `请修正 projects/${project} 的姿态缺陷。\n用户查看的文件：projects/${project}/${file}\n问题区域：${areas[area as keyof typeof areas]}\n实际反馈：${issue.trim()}\n\n先读取当前原图、绑定及指定审查图，针对问题部位生成局部坐标网格和叠加图，说明根因再局部修改。不要覆盖用户无关改动。重新构建图层并渲染姿态，查看修改前后是否消除了缺陷，以及是否引入新裂缝。最多三轮，失败如实报告。不要因为工具执行成功就宣称视觉质量通过。未经另行授权，不调用外部生图服务。`;
-        window.dispatchEvent(new CustomEvent('studio:agent-prompt', { detail: prompt })); onClose();
+        window.dispatchEvent(new CustomEvent('studio:agent-start', { detail: { prompt, projectName: project, source: `projects/${project}/source.png` } })); onClose();
       }}>{zh ? '交给 Agent 修正' : 'Prepare correction task'}</Button>
     </div>
   </Drawer>;

@@ -9,7 +9,12 @@ import { useI18n } from '../editor/i18n';
 export function ProductionProgress({ productionBusy = false }: { productionBusy?: boolean }) {
   const { language } = useI18n(), zh = language === 'zh';
   const [task, setTask] = useState<CreationTask | undefined>(() => {
-    try { const saved = JSON.parse(readPreference('studio-creation-task') ?? 'null'); return saved && typeof saved.projectName === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(saved.projectName) && typeof saved.source === 'string' ? saved : undefined; } catch { return undefined; }
+    try {
+      const saved = JSON.parse(readPreference('studio-creation-task') ?? 'null');
+      if (saved && typeof saved.projectName === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(saved.projectName) && typeof saved.source === 'string') return saved;
+      const turn = JSON.parse(readPreference('studio-acp-production-turn') ?? 'null');
+      return turn && typeof turn.projectName === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(turn.projectName) && typeof turn.source === 'string' ? { projectName: turn.projectName, source: turn.source } : undefined;
+    } catch { return undefined; }
   });
   const [reviewOpen, setReviewOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);

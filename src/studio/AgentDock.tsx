@@ -21,7 +21,7 @@ function readSavedSession(): Session | undefined {
 function readSavedTurn() {
   try {
     const value = JSON.parse(readPreference(TURN_KEY) ?? 'null');
-    return value && typeof value.sessionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value.projectName) ? { sessionId: value.sessionId, projectName: value.projectName } : undefined;
+    return value && typeof value.sessionId === 'string' && /^[A-Za-z0-9_-]{1,64}$/.test(value.projectName) && typeof value.source === 'string' ? { sessionId: value.sessionId, projectName: value.projectName, source: value.source } : undefined;
   } catch { return undefined; }
 }
 type Entry = { id: string; kind: 'user' | 'assistant' | 'tool' | 'plan'; text: string; status?: string; detail?: string };
@@ -88,7 +88,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
     // Consume before sending. Reconnection must not silently duplicate a creation request.
-    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
+    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName, source: pending.source })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
     socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));
     pinned.current = true;
   }, [status, pendingCreation]);

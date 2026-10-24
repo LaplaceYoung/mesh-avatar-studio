@@ -82,6 +82,7 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
   const orderedStages = status?.stages ?? [];
   const activeIndex = orderedStages.findIndex(stage => stage.state !== 'observed');
   const needsSignoff = !!status && !nextStage && status.visualReview !== 'approved';
+  const autoContinuationQueued = autoContinuePending.current && !!task.autoContinue;
   const resume = () => {
     if (!status || !nextStage) return;
     autoContinuePending.current = false;
@@ -120,6 +121,7 @@ ${taskText}
   }, [status, productionBusy, task, zh]);
   return <div className="production-progress"><Collapse ghost defaultActiveKey={['production']} items={[{ key: 'production', label: <Space><strong>{zh ? '制作产物' : 'Production artifacts'}</strong><small>{task.projectName}</small></Space>, children: <>
     {error && <Alert type="warning" title={error} />}
+    {autoContinuationQueued && <Alert className="production-activity" type="info" showIcon title={zh ? '自动续跑已排队' : 'Automatic continuation queued'} description={zh ? '正在等待最新生产状态，确认阶段确实发生变化后再提交下一轮 ACP 任务。' : 'Waiting for the latest production status; the next ACP turn will start only after a real stage change is observed.'} />}
     {activity && <Alert className="production-activity" type={productionBusy ? 'info' : activity.state === 'failed' ? 'error' : activity.state === 'completed' ? 'success' : 'warning'} showIcon title={productionBusy ? activity.message ?? (zh ? 'ACP 正在执行' : 'ACP is running') : activity.message ?? (zh ? '上次 ACP 活动' : 'Last ACP activity')} description={productionBusy ? (zh ? '当前会话正在执行；断线时请重连，不要重复提交任务。' : 'The current session is running; reconnect after a disconnect instead of submitting another task.') : (zh ? `历史活动 · ${new Date(activity.at).toLocaleString()}` : `Historical activity · ${new Date(activity.at).toLocaleString()}`)} />}
     {status && <Steps className="production-steps" size="small" responsive={false} current={activeIndex < 0 ? orderedStages.length : activeIndex} items={orderedStages.map(stage => ({ title: titles[stage.id], status: stage.state === 'invalid' ? 'error' : stage.state === 'observed' ? 'finish' : 'process' }))} />}
     <div className="production-stages">{status?.stages.map(stage => <div key={stage.id}>

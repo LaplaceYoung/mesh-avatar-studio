@@ -130,6 +130,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const reviewed = new Set(regionNames.filter(name => reviewedFiles[name]?.includes('detail') && reviewedFiles[name]?.includes('grid')));
     result.reviewed = [...reviewed];
     result.reviewedFiles = reviewedFiles;
+    const coreNames = new Set(Object.values(regionAliases).flatMap(names => [...names]));
+    result.regionSummary = regions.map(region => ({ name: region.name as string, confidence: region.confidence as 'low' | 'medium' | 'high', step: region.step as number, core: coreNames.has(region.name as string), detailReviewed: reviewedFiles[region.name as string]?.includes('detail') ?? false, gridReviewed: reviewedFiles[region.name as string]?.includes('grid') ?? false }));
     // Human review is optional provenance, not an automation prerequisite.
     // Missing/stale evidence and uncertain regions remain artifact issues below.
     result.files.push(evidence.replace(project + sep, ''));

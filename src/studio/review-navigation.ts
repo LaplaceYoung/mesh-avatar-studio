@@ -9,7 +9,7 @@ export function reviewNavigation(files: string[], selected?: string) {
     return files.includes(target) ? target : undefined;
   };
   // Keep the inspected crop across frames; never silently substitute full images.
-  return { frame, index, count: frames.length, full: variant(frame), eyes: variant(frame, 'eyes'), mouth: variant(frame, 'mouth'),
+  return { frame, index, count: frames.length, full: variant(frame), eyes: variant(frame, 'eyes'), mouth: variant(frame, 'mouth'), baseline: selected === 'review/contact-sheet.png' ? undefined : variant('review/rest.png', crop),
     previous: index > 0 ? variant(frames[index - 1], crop) : undefined,
     next: index >= 0 && index + 1 < frames.length ? variant(frames[index + 1], crop) : undefined };
 }

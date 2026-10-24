@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Alert, Button, Drawer, Empty, Image, Input, Select, Space, Tag } from 'antd';
+import { Alert, Button, Checkbox, Drawer, Empty, Image, Input, Select, Space, Tag } from 'antd';
 import type { ProductionStage } from '../shared/production';
 import { useI18n } from '../editor/i18n';
 import { readPreference, savePreference } from '../editor/preferences';
@@ -13,12 +13,15 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
   const [selected, setSelected] = useState('');
   const [issue, setIssue] = useState(''), [area, setArea] = useState('eyes');
   const [revision, setRevision] = useState(0);
+  const [compare, setCompare] = useState(false);
   const key = `studio-review-note:${project}`;
   useEffect(() => { setSelected(''); setIssue(readPreference(key) ?? ''); }, [key]);
   const file = files.includes(selected) ? selected : files.find(file => file.endsWith('contact-sheet.png')) ?? files[0];
   const areas = zh ? { eyes: '眼睛 / 闭眼残留', mouth: '嘴部 / 下巴拉伸', hair: '头发 / 面部遮挡', head: '转头 / 耳朵破损', body: '身体 / 饰品摆动', other: '其他问题' } : { eyes: 'Eyes / blinking', mouth: 'Mouth / chin', hair: 'Hair / face overlap', head: 'Head turn / ears', body: 'Body / accessories', other: 'Other' };
   const contactSheet = files.find(value => value.endsWith('contact-sheet.png'));
   const navigation = reviewNavigation(files, file);
+  const imageUrl = (value: string) => `/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(value.slice('review/'.length))}&revision=${revision}`;
+  const baseline = compare && navigation.baseline !== file ? navigation.baseline : undefined;
   const quickFiles = [
     { key: 'contact', label: zh ? '总览' : 'Contact sheet', file: contactSheet },
     { key: 'full', label: zh ? '当前动作全图' : 'Full pose', file: navigation.full },
@@ -59,7 +62,11 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
           <span role="status">{navigation.index + 1}/{navigation.count} · {navigation.frame?.slice('review/'.length)}</span>
           <Button disabled={!navigation.next} onClick={() => setSelected(navigation.next!)}>{zh ? '下一帧' : 'Next frame'}</Button>
         </Space>}
-        <div className="review-image-stage"><Image src={`/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(file.slice('review/'.length))}&revision=${revision}`} alt={`${project} / ${file}`} /></div>
+        <Checkbox checked={compare} disabled={!navigation.baseline || navigation.baseline === file} onChange={event => setCompare(event.target.checked)}>{zh ? '与静止帧对比（保持全图／眼部／嘴部类型）' : 'Compare with rest pose (same full/eye/mouth view)'}</Checkbox>
+        <div className={baseline ? 'review-comparison' : undefined}>
+          {baseline && <figure><figcaption>{zh ? '基准：静止帧' : 'Baseline: rest'} · {baseline.slice('review/'.length)}</figcaption><div className="review-image-stage"><Image src={imageUrl(baseline)} alt={`${project} / ${baseline}`} /></div></figure>}
+          <figure className="review-current-frame"><figcaption>{zh ? '当前证据' : 'Current evidence'} · {file.slice('review/'.length)}</figcaption><div className="review-image-stage"><Image src={imageUrl(file)} alt={`${project} / ${file}`} /></div></figure>
+        </div>
         <small className="muted">{zh ? '点击图片放大。必须同时检查 contact sheet、眼部裁剪和嘴部裁剪，再检查闭眼残留、转头裂缝、嘴部拉伸、头发遮挡；生成图片不等于通过审查。' : 'Inspect the contact sheet, eye crop and mouth crop as well as blink residue, tears, mouth stretching and hair overlap. Rendering is not approval.'}</small>
       </> : <Empty description={zh ? '尚无审查图片，请让 Agent 先运行 render-poses。' : 'Ask the agent to run render-poses first.'} />}
       <label>{zh ? '问题区域' : 'Affected region'}<Select value={area} onChange={setArea} options={Object.entries(areas).map(([value, label]) => ({ value, label }))} /></label>

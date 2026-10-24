@@ -145,3 +145,7 @@ small,.muted { color:var(--studio-muted); }
 .illustration-alpha-preview { flex-shrink:0; background:repeating-conic-gradient(#b8b8b8 0% 25%,#e6e6e6 0% 50%) 0 0/16px 16px; }
 .illustration-summary .illustration-alpha-preview img { max-height:240px; }
 @media(max-width:600px) { .illustration-summary { flex-wrap:wrap; } }
+.review-comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:start; }
+.review-comparison figure,.review-current-frame { margin:0; min-width:0; }
+.review-comparison figcaption,.review-current-frame figcaption { font-size:11px; color:var(--studio-muted); overflow-wrap:anywhere; margin-bottom:6px; }
+@media(max-width:600px) { .review-comparison { grid-template-columns:1fr; } }

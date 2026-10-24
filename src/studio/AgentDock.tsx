@@ -120,12 +120,15 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     ws.onopen = () => ws.send(JSON.stringify({ type: 'attach', ...session }));
     ws.onmessage = event => { try { apply(JSON.parse(event.data)); } catch { setError('Invalid ACP event'); } };
     ws.onerror = () => setError(zh ? '连接失败，请检查本地服务。' : 'Connection failed. Check the local server.');
-    ws.onclose = () => setStatus(current => current === 'exited' ? current : 'disconnected');
+    ws.onclose = () => {
+      setStatus(current => current === 'exited' ? current : 'disconnected');
+      if (productionTurn.current) emitActivity('working', zh ? 'ACP 连接暂时断开；请点击重连，原制作任务仍保留。' : 'ACP connection lost; reconnect to resume the existing production turn.');
+    };
     return () => { ws.onclose = null; ws.close(); socket.current = null; };
   }, [session, attempt]);
   const send = (message: object) => { if (socket.current?.readyState === WebSocket.OPEN) { socket.current.send(JSON.stringify(message)); return true; } setError(zh ? '会话连接已断开，请重连。' : 'Session disconnected. Reconnect first.'); return false; };
   const active = status === 'ready' || status === 'working';
-  const statusLabel: Record<string, string> = { idle: '未连接', starting: '正在初始化 ACP', ready: '就绪', working: '执行中', configuring: '更新配置中', disconnected: '已断开', exited: '已结束' };
+  const statusLabel: Record<string, string> = { idle: '未连接', starting: '正在初始化 ACP', ready: '就绪', working: '执行中', configuring: '更新配置中', disconnected: productionTurn.current ? '连接断开，待重连' : '已断开', exited: '已结束' };
   return <section className="agent-dock" aria-label={zh ? 'Agent 对话' : 'Agent conversation'}>
     <div className="agent-toolbar"><Space><Tag color={active ? 'green' : 'default'}>{zh ? statusLabel[status] ?? status : status}</Tag><span className="muted">ACP</span></Space>
       <Space wrap><Select aria-label="Agent" value={provider} disabled={!!session && status !== 'exited'} onChange={setProvider} style={{ width: 142 }} options={(providers.length ? providers : (Object.keys(labels) as Provider[]).map(id => ({ id, available: true }))).map(p => ({ value: p.id, label: `${labels[p.id]}${p.available ? '' : zh ? ' · 未安装' : ' · missing'}`, disabled: !p.available }))} />
@@ -135,6 +138,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
         <Button icon={<ReloadOutlined />} onClick={onRefresh} aria-label={zh ? '刷新项目' : 'Refresh project'} />
       </Space></div>
     {pendingCreation && <Alert type="info" title={`${zh ? '待提交制作' : 'Pending creation'} · ${pendingCreation.projectName}`} description={zh ? '将于所选 Agent 连接就绪且空闲时自动提交。请确认 Agent 和模型；也可取消。' : 'Will submit when the selected agent is connected and idle. Check the agent/model or cancel.'} action={<Button onClick={() => { pendingRef.current = undefined; setPendingCreation(undefined); }}>{zh ? '取消提交' : 'Cancel submission'}</Button>} />}
+    {status === 'disconnected' && productionTurn.current && <Alert type="warning" title={zh ? '制作任务仍在原 ACP 会话中' : 'Production turn is still held by the original ACP session'} description={zh ? '请点击“重连”恢复现有会话；不要提交新的制作任务，避免重复写入项目。' : 'Click Reconnect to attach to the existing session. Do not submit another production task.'} />}
     {error && <Alert type="error" title={error} closable onClose={() => setError('')} />}
     {session && <Collapse ghost className="agent-configuration" items={[{ key: 'configuration', label: zh ? '模型与推理配置' : 'Model and reasoning settings', children: config.length ? <div className="agent-config-fields">{config.map(option => {
       const editable = ['model', 'model_config', 'thought_level'].includes(option.category ?? '');

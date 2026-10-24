@@ -6,7 +6,7 @@ import { Alert, Button, Collapse, Space, Steps, Tag } from 'antd';
 import type { CreationTask, ProductionActivity, ProductionStatus } from '../shared/production';
 import { useI18n } from '../editor/i18n';
 
-export function ProductionProgress() {
+export function ProductionProgress({ productionBusy = false }: { productionBusy?: boolean }) {
   const { language } = useI18n(), zh = language === 'zh';
   const [task, setTask] = useState<CreationTask | undefined>(() => {
     try { const saved = JSON.parse(readPreference('studio-creation-task') ?? 'null'); return saved && typeof saved.projectName === 'string' && /^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(saved.projectName) && typeof saved.source === 'string' ? saved : undefined; } catch { return undefined; }
@@ -20,6 +20,7 @@ export function ProductionProgress() {
   const [activity, setActivity] = useState<ProductionActivity>();
   const [error, setError] = useState('');
   useEffect(() => {
+    setActivity(undefined);
     if (!task) return;
     try {
       const value = JSON.parse(readPreference(`studio-production-activity:${task.projectName}`) ?? 'null') as Partial<ProductionActivity> | null;
@@ -46,7 +47,7 @@ export function ProductionProgress() {
     void inspect(); return () => { disposed = true; controller.abort(); clearTimeout(timer); };
   }, [task, refreshTick]);
   useEffect(() => {
-    const refresh = () => { setStatus(undefined); setRefreshTick(value => value + 1); };
+    const refresh = () => { setRefreshTick(value => value + 1); };
     window.addEventListener('studio:production-refresh', refresh);
     return () => window.removeEventListener('studio:production-refresh', refresh);
   }, []);
@@ -67,7 +68,6 @@ export function ProductionProgress() {
   const orderedStages = status?.stages ?? [];
   const activeIndex = orderedStages.findIndex(stage => stage.state !== 'observed');
   const needsSignoff = !!status && !nextStage && status.visualReview !== 'approved';
-  const productionBusy = activity?.state === 'starting' || activity?.state === 'working';
   const resume = () => {
     if (!status || !nextStage) return;
     const taskText = nextStage.id === 'source'

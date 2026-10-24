@@ -80,14 +80,17 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       if (event.type === 'ready') { setStatus('ready'); setConfig(event.session?.configOptions ?? []); }
       if (event.type === 'configuration' && event.configOptions) setConfig(event.configOptions);
       if (event.type === 'state' && event.state) setStatus(event.state);
-      if (event.type === 'exit') setStatus('exited');
+      if (event.type === 'exit') {
+        setStatus('exited');
+        if (productionTurn.current) { productionTurn.current = false; emitActivity('failed', zh ? 'Agent 进程已结束，请检查产物后继续。' : 'Agent process exited. Inspect artifacts before resuming.'); }
+      }
       if (event.type === 'error') { setError(event.message ?? 'Agent error'); if (productionTurn.current) { productionTurn.current = false; emitActivity('failed', event.message ?? 'Agent error'); } setStatus(current => current === 'configuring' ? 'ready' : current); }
       if (event.type === 'complete') {
         streamId.current = null; setStatus('ready');
         // ACP completion means the turn ended, not that visual approval exists.
-        // Refresh through the existing dirty-state guard so disk changes become
-        // visible without replacing unsaved editor work silently.
-        if (productionTurn.current) { productionTurn.current = false; emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.'); window.setTimeout(onRefresh, 400); }
+        // Only inspect artifacts here. The socket callback can outlive the editor
+        // state it captured; reloading that editor must remain an explicit action.
+        if (productionTurn.current) { productionTurn.current = false; emitActivity('completed', zh ? 'Agent 执行完成，正在刷新制作产物。' : 'Agent turn completed; refreshing production artifacts.'); window.dispatchEvent(new Event('studio:production-refresh')); }
       }
       if (event.type === 'permission' && event.id && event.options) setPermissions(items => [...items.filter(p => p.id !== event.id), event as Permission]);
       if (event.type === 'permission_resolved') setPermissions(items => items.filter(p => p.id !== event.id));
@@ -141,7 +144,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
         : <Checkbox checked={option.currentValue} disabled={!editable || status !== 'ready'} onChange={event => change(event.target.checked)} />}
         {option.description && <small className="muted">{option.description}</small>}</label>;
     })}<small className="muted">{zh ? '选项来自当前 Agent；权限模式只读。模型能力仍需通过实际视觉校准确认。' : 'Options come from the agent; permission modes are read-only. Verify vision ability through calibration.'}</small></div> : <small className="muted">{zh ? '此 Agent 尚未返回可用配置。' : 'No configuration advertised by this agent.'}</small> }]} />}
-    <ProductionProgress />
+    <ProductionProgress productionBusy={!!pendingCreation || productionTurn.current || ['starting', 'working', 'configuring'].includes(status)} />
     <div className="agent-conversation" ref={feed} role="log" aria-live="polite" onScroll={event => { const el = event.currentTarget; pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 64; }}>
       {!entries.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={zh ? '连接 Agent 后描述创作任务，工具调用和审批会显示在这里。' : 'Connect an agent to start. Tool activity and permissions appear here.'} />}
       {entries.map(entry => entry.kind === 'tool' ? <Collapse className="agent-tool-detail" ghost key={entry.id} items={[{ key: entry.id, label: <span className="agent-tool"><Tag color={entry.status === 'failed' ? 'error' : entry.status === 'completed' ? 'success' : undefined}>{entry.status ?? 'pending'}</Tag><span>{entry.text}</span></span>, children: entry.detail ? <pre>{entry.detail}</pre> : <small className="muted">{zh ? 'Agent 尚未提供详细结果。' : 'No detailed output reported yet.'}</small> }]} /> : <article key={entry.id} className={`agent-message agent-message-${entry.kind}`}><small>{entry.kind === 'user' ? zh ? '你' : 'You' : entry.kind === 'plan' ? zh ? '执行计划' : 'Plan' : labels[session?.provider ?? provider]}</small><div>{entry.text}</div></article>)}

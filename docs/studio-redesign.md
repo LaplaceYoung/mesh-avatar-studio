@@ -292,3 +292,17 @@ rigging. The previous mandatory-click policy conflicted with upload-to-avatar
 correction; final human visual approval remains separate and is never inferred
 from artifact presence. A successful status response does not prove anatomy or
 motion quality. The existing review controls and private records are preserved.
+
+## Production refresh and live-state ownership
+
+ACP production completion requests an artifact inspection, not an editor reload.
+The explicit Refresh project action still uses the current unsaved-edit guard.
+This avoids invoking a stale editor callback retained by the WebSocket effect.
+Artifact inspection keeps the previous snapshot visible while fetching its
+replacement, so review drawers do not lose their selection between requests.
+
+Historical activity in local storage is informational only: it must never disable
+Resume. The currently mounted ACP session and pending request own the busy flag.
+An explicit process exit releases the production-turn flag; a socket disconnect
+alone does not prove the agent process stopped. Cross-tab task locking and session
+recovery after a full page reload are not yet guaranteed by this client-side flag.

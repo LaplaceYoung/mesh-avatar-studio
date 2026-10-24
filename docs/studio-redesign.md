@@ -360,3 +360,16 @@ restarting a turn that ended during disconnection. Verification still needed
 with a real provider: disconnect during a second production turn after an older
 completed turn, reconnect, and confirm that the older completion does not clear
 the current production marker or submit a new prompt.
+
+## Opaque background evidence
+
+A local review of an existing generated avatar showed all six artifact stages
+as observed, yet the white square background visibly rotated in tilt poses.
+Pixel inspection found no fully transparent source pixels and opaque corners
+in built/base.png. This is a source/background separation defect, not evidence
+that pose parameters are wrong. Source preflight now explicitly warns on fully
+opaque input, including uniform white backgrounds. Preserve the original;
+perform local background separation with edge inspection before rigging, or
+report the limitation. Never claim the warning or manifest checks fix it.
+Inspect tilt-left/right on a contrasting background before visual approval.
+The reviewed private source and derived images were not changed or committed.

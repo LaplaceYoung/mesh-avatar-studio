@@ -49,6 +49,7 @@ export function inspectImagePreflight(image: PNG): ImagePreflight {
   const marginY = Math.max(1, Math.round(image.height * 0.02));
   const edgeTouch = { top: y0 <= marginY, right: x1 >= image.width - marginX, bottom: y1 >= image.height - marginY, left: x0 <= marginX };
   const warnings: string[] = [];
+  if (!transparent) warnings.push('The source is fully opaque: its background may rotate and deform with the avatar. Separate the character from the background locally before rigging, or explicitly retain this limitation. Uniform white is not transparency; inspect tilt-left and tilt-right against a contrasting background.');
   if (Object.values(edgeTouch).some(Boolean)) warnings.push('Estimated subject touches the image edge; head, shoulders or accessories may be cropped during deformation.');
   if (!transparent && borderUniformity < 0.82) warnings.push('Border background is not uniform; inspect gradients, shadows or scenery before layer extraction.');
   if (transparent && alphaPixels / total < 0.01) warnings.push('Transparency coverage is very small; confirm that the alpha channel represents the intended background.');

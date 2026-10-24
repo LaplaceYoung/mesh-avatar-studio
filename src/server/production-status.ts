@@ -205,6 +205,29 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     if (hairFrames.length < 6) result.issues.push(`Motion review is missing hair-sway frames: expected 6, found ${hairFrames.length}.`);
     const poseNames = Array.isArray(metadata.poses) ? metadata.poses.map((pose: unknown) => pose && typeof pose === 'object' && typeof (pose as { name?: unknown }).name === 'string' ? (pose as { name: string }).name : '') : [];
     if (poseNames.length !== requiredPoses.length || requiredPoses.some(name => !poseNames.includes(name))) result.issues.push('Motion review metadata does not describe the complete standard pose set. Re-render poses instead of editing poses.json by hand.');
+    const expectedPoseParameters: Record<string, Record<string, number>> = {
+      'eyes-half': { eyeLOpen: 0.5, eyeROpen: 0.5 },
+      'eyes-closed': { eyeLOpen: 0, eyeROpen: 0 },
+      'mouth-open': { mouthOpen: 1 },
+      'turn-left': { angleX: -30 },
+      'turn-right': { angleX: 30 },
+      'look-up': { angleY: 15 },
+      'look-down': { angleY: -15 },
+      'tilt-left': { angleZ: -15 },
+      'tilt-right': { angleZ: 15 },
+      'body-left': { bodyAngleZ: -8 },
+      'body-right': { bodyAngleZ: 8 },
+    };
+    if (Array.isArray(metadata.poses)) for (const pose of metadata.poses) {
+      if (!pose || typeof pose !== 'object' || typeof (pose as { name?: unknown }).name !== 'string') continue;
+      const name = (pose as { name: string }).name, expected = expectedPoseParameters[name];
+      if (expected) {
+        const parameters = (pose as { parameters?: unknown }).parameters;
+        if (!parameters || typeof parameters !== 'object' || Object.entries(expected).some(([key, value]) => (parameters as Record<string, unknown>)[key] !== value)) result.issues.push(`Motion pose ${name} has unexpected parameters; re-render from the current renderer.`);
+      }
+      const expression = (pose as { expression?: unknown }).expression;
+      if (['angry', 'sad', 'surprise'].includes(name) && expression !== name) result.issues.push(`Motion pose ${name} is missing its matching expression metadata; re-render from the current renderer.`);
+    }
     if (metadata.fixedFps !== 60) result.issues.push('Motion review must be rendered at a fixed 60 FPS for comparable frame checks.');
     if (metadata.hairFrames !== 6) result.issues.push('Motion review metadata must contain 6 hair-sway frames.');
     const cropBounds = metadata.cropBounds as { eyes?: unknown; mouth?: unknown } | undefined;

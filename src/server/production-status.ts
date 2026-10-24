@@ -86,7 +86,7 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     result.files.push(file); return value;
   }
   async function sourceHash() {
-    const file = join(project, 'source.png');
+    const { actual: file } = await checkedFile('source.png', 64 * 1024 * 1024);
     return createHash('sha256').update(await readFile(file)).digest('hex');
   }
   async function png(file: string, result: ProductionStage) {
@@ -100,7 +100,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   }
   let source: { width: number; height: number; modified: number } | undefined;
   let rigModified = 0, layersModified = 0, reviewModified = 0, signoffAt: string | undefined;
-  await stage('source', async result => { source = await png('source.png', result); });
+  let sourceSha256: string | undefined;
+  await stage('source', async result => { source = await png('source.png', result); sourceSha256 = await sourceHash(); });
   await stage('regions', async result => {
     const regions: unknown = await json('regions.json', result);
     if (!Array.isArray(regions) || !regions.length || regions.length > 32) throw new Error('Expected 1–32 observed regions.');
@@ -123,7 +124,7 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     if (rightEye && regions.find(region => region.name === rightEye)?.step > 5) throw new Error('The image-right eye region must use a grid step of 5 px or finer.');
     const mouth = [...regionAliases.mouth].find(name => names.has(name));
     if (mouth && regions.find(region => region.name === mouth)?.step > 5) throw new Error('The mouth region must use a grid step of 5 px or finer for lip-sync deformation.');
-    const expectedHash = await sourceHash();
+    const expectedHash = sourceSha256;
     const work = join(project, 'work');
     let evidence: string | undefined;
     try {
@@ -266,7 +267,7 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   } catch { /* A missing or stale signoff stays unverified. */ }
   const firstIncomplete = stages.find(stage => stage.state !== 'observed');
   const nextAction = firstIncomplete ? actionFor(firstIncomplete, name) : undefined;
-  return { project: name, projectExists, checkedAt: new Date().toISOString(), stages,
+  return { sourceSha256, project: name, projectExists, checkedAt: new Date().toISOString(), stages,
     previewAvailable: ['source', 'rig', 'layers'].every(id => stages.some(stage => stage.id === id && stage.state === 'observed')),
     visualReview: signoffAt ? 'approved' : 'unverified', ...(signoffAt ? { visualReviewAt: signoffAt } : {}), ...(nextAction ? { nextAction } : {}) };
 }

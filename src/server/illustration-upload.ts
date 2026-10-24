@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, realpath, writeFile, readFile, stat } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { PNG } from 'pngjs';
@@ -59,7 +59,7 @@ export function illustrationUpload(root: string): Plugin {
         await mkdir(directory, { mode: 0o700 });
         await writeFile(join(directory, 'original.png'), bytes, { flag: 'wx', mode: 0o600 });
         await writeFile(join(directory, 'source.png'), processed, { flag: 'wx', mode: 0o600 });
-        const upload = { id, source: `projects/.uploads/${id}/source.png`, projectName: `avatar-${id.slice(0, 8)}`, width, height, backgroundProcessed, ...(backgroundProcessed ? { warning: 'Background removal is approximate; inspect light hair and clothing. Original preserved.' } : {}), transparent: preflight.method === 'alpha', preflight, uploadedAt: new Date().toISOString() };
+        const upload = { sourceSha256: createHash('sha256').update(processed).digest('hex'), id, source: `projects/.uploads/${id}/source.png`, projectName: `avatar-${id.slice(0, 8)}`, width, height, backgroundProcessed, ...(backgroundProcessed ? { warning: 'Background removal is approximate; inspect light hair and clothing. Original preserved.' } : {}), transparent: preflight.method === 'alpha', preflight, uploadedAt: new Date().toISOString() };
         await writeFile(join(directory, 'upload.json'), JSON.stringify(upload, null, 2), { flag: 'wx', mode: 0o600 });
         reply(201, upload);
       } catch { reply(500, { error: 'Could not save the image locally. Check disk space and project permissions.' }); }

@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, realpath, writeFile } from 'node:fs/promises';
 import { join, sep } from 'node:path';
 import { PNG } from 'pngjs';
@@ -21,7 +21,7 @@ Background: perfectly flat solid white (#FFFFFF), without gradients, texture, ch
 The result must be useful as a source image to trace face, eyes, mouth, hair, accessories, hands, body and mesh regions in source-image pixel coordinates. Do not create a sheet, turnaround, multiple poses, cropped head, or text.`;
 export const LIVE2D_NEGATIVE_PROMPT = 'multiple characters, side profile, three-quarter extreme angle, cropped head, cropped shoulders, face covered, eyes covered, mouth covered, hand over face, prop over face, glasses crossing eyes, tangled hair over eyes, merged silhouette, complex background, gradient background, cast shadow, floor, scenery, text, logo, watermark, signature, collage, character sheet, turnaround, multiple poses, open mouth with unclear lips, asymmetrical eyes, low resolution, blur, noisy texture, photorealistic, transparent checkerboard';
 
-type Upload = { id: string; source: string; projectName: string; width: number; height: number; transparent: boolean; generated: true; model: string; prompt: string; backgroundProcessed: boolean; preflight: ReturnType<typeof inspectImagePreflight>; warning?: string };
+type Upload = { sourceSha256: string; id: string; source: string; projectName: string; width: number; height: number; transparent: boolean; generated: true; model: string; prompt: string; backgroundProcessed: boolean; preflight: ReturnType<typeof inspectImagePreflight>; warning?: string };
 function reply(res: import('node:http').ServerResponse, status: number, data: object) { res.writeHead(status, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(data)); }
 
 function pngInfo(bytes: Buffer) {
@@ -75,7 +75,7 @@ export function mosiImagePlugin(root: string): Plugin {
         const id = randomUUID(), directory = join(base, id); await mkdir(directory, { mode: 0o700 });
         await writeFile(join(directory, 'original.png'), original, { flag: 'wx', mode: 0o600 });
         await writeFile(join(directory, 'source.png'), bytes, { flag: 'wx', mode: 0o600 });
-        const upload: Upload = { id, source: `projects/.uploads/${id}/source.png`, projectName, ...info, generated: true, model: MODEL, prompt, backgroundProcessed, ...(backgroundProcessed || info.preflight.warnings.length ? { warning: [...(backgroundProcessed ? ['Background removal is approximate. Inspect light hair, clothing edges and gaps before rigging. The unmodified original.png is preserved.'] : []), ...info.preflight.warnings].join(' ') } : {}) };
+        const upload: Upload = { sourceSha256: createHash('sha256').update(bytes).digest('hex'), id, source: `projects/.uploads/${id}/source.png`, projectName, ...info, generated: true, model: MODEL, prompt, backgroundProcessed, ...(backgroundProcessed || info.preflight.warnings.length ? { warning: [...(backgroundProcessed ? ['Background removal is approximate. Inspect light hair, clothing edges and gaps before rigging. The unmodified original.png is preserved.'] : []), ...info.preflight.warnings].join(' ') } : {}) };
         await writeFile(join(directory, 'upload.json'), JSON.stringify(upload, null, 2), { flag: 'wx', mode: 0o600 });
         reply(res, 201, upload);
       } catch (error) { reply(res, 422, { error: error instanceof Error ? error.message : 'Generated image failed validation.' }); }

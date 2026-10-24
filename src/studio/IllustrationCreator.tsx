@@ -3,7 +3,7 @@ import { Alert, Button, Checkbox, Image, Input, Segmented, Space, Steps, Upload 
 import { InboxOutlined } from '@ant-design/icons';
 import { useI18n } from '../editor/i18n';
 
-type Uploaded = { source: string; projectName: string; width: number; height: number; transparent: boolean; backgroundProcessed?: boolean; warning?: string; preflight?: { method: string; alphaCoverage: number; estimatedContentBox: [number, number, number, number]; edgeTouch: { top: boolean; right: boolean; bottom: boolean; left: boolean }; borderUniformity: number; warnings: string[] } };
+type Uploaded = { sourceSha256?: string; source: string; projectName: string; width: number; height: number; transparent: boolean; backgroundProcessed?: boolean; warning?: string; preflight?: { method: string; alphaCoverage: number; estimatedContentBox: [number, number, number, number]; edgeTouch: { top: boolean; right: boolean; bottom: boolean; left: boolean }; borderUniformity: number; warnings: string[] } };
 export function IllustrationCreator() {
   const { language } = useI18n(), zh = language === 'zh';
   const [upload, setUpload] = useState<Uploaded>();
@@ -67,6 +67,7 @@ export function IllustrationCreator() {
       const existing = await response.json();
       if (!response.ok) throw new Error(existing.error);
       if (existing.projectExists && submittedProject === name && activity?.state === 'failed') {
+        if (!upload.sourceSha256 || existing.sourceSha256 !== upload.sourceSha256) throw new Error(zh ? '项目源图与本次上传不一致或缺少校验值，已停止恢复。请检查源图，不会覆盖现有项目。' : 'The project source differs from this upload or its hash is unavailable. Recovery stopped without overwriting the project.');
         const prompt = `恢复本次失败的角色制作 projects/${name}，不是新建项目。先阅读 AGENTS.md 和 docs/agent-guide.md。用户同意所选 Agent 使用其配置的视觉模型处理本次图片，不授权其他外部服务。
 先比较上传源图 ${upload.source} 与 projects/${name}/source.png 的尺寸和 SHA-256；不一致或文件缺失时停止并报告，绝不覆盖 source.png 或运行 new-project --force。
 源图确认一致后检查已有产物，从当前缺口继续：${existing.nextAction?.instruction ?? '现有产物阶段已齐全，请逐张检查姿态、眼部和嘴部裁剪，报告尚存视觉问题。'}

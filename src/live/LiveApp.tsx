@@ -30,6 +30,7 @@ export function LiveApp() {
   const [cameraState, setCameraState] = useState<CameraState>('stopped');
   const [micState, setMicState] = useState<MicState>('micOff');
   const [tracking, setTracking] = useState(false), [showCamera, setShowCamera] = useState(true);
+  const [textLip, setTextLip] = useState(''), [textLipLanguage, setTextLipLanguage] = useState<'zh' | 'ja'>('zh'), [textLipLoop, setTextLipLoop] = useState(false), [textLipActive, setTextLipActive] = useState(false);
   const [devices, setDevices] = useState<MediaDeviceInfo[]>([]), [cameraId, setCameraId] = useState(''), [micId, setMicId] = useState('');
   const [gain, setGain] = useState(1), [calibrated, setCalibrated] = useState(false);
   const [copyState, setCopyState] = useState<'copied' | 'copyError' | null>(null);
@@ -41,6 +42,8 @@ export function LiveApp() {
   const lightRef = useRef(settings.lighting); lightRef.current = settings.lighting;
   const pose = useRef(new FacePose());
   const controls = useRef({ options, gain, micState, cameraState }); controls.current = { options, gain, micState, cameraState };
+  const textLipActiveRef = useRef(false); textLipActiveRef.current = textLipActive;
+  const textLipLoopRef = useRef(false); textLipLoopRef.current = textLipLoop;
   const refreshDevices = () => { void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => undefined); };
   useEffect(() => {
     const capture = new CameraCapture(video.current!, (result, now) => pose.current.update(result, now), state => { setCameraState(state); if (state !== 'running') setTracking(false); });
@@ -66,6 +69,7 @@ export function LiveApp() {
       setTracking(sampled.tracking);
       avatar.setAutoIdle(!sampled.tracking); avatar.setAutoMotion(!sampled.tracking);
       avatar.setParameters(sampled.params, sampled.weight);
+      if (textLipActiveRef.current && !textLipLoopRef.current && !avatar.getLipSyncState().active) setTextLipActive(false);
       const micOn = control.micState === 'micOn';
       avatar.setSpeaking(micOn); avatar.setVoiceLevel(micOn ? microphone.current?.level(control.gain) ?? 0 : 0);
     }, (avatar, now) => {
@@ -74,6 +78,12 @@ export function LiveApp() {
     }).then(value => { if (cancelled) value.destroy(); else { view = value; avatarRef.current = value.avatar; value.avatar.setLighting(lightRef.current); value.avatar.setExpression(expressionRef.current); setViewState('ready'); } }).catch(() => { if (!cancelled) setViewState('projectError'); });
     return () => { cancelled = true; clock.terminate(); view?.destroy(); avatarRef.current = null; };
   }, [settings.project, settings.fit]);
+  useEffect(() => {
+    const avatar = avatarRef.current;
+    if (!avatar) return;
+    avatar.stopLipSync();
+    if (textLipActive && textLip.trim()) avatar.speak(textLip, { lang: textLipLanguage, loop: textLipLoop, speed: 7 });
+  }, [textLipActive, textLip, textLipLanguage, textLipLoop]);
   useEffect(() => {
     saveLighting(settings.project, settings.lighting);
     avatarRef.current?.setLighting(settings.lighting);
@@ -150,7 +160,8 @@ export function LiveApp() {
         <label className="live-check"><CheckInput checked={showCamera} onChange={event => setShowCamera(event.target.checked)} />{t.cameraPreview}</label>
         <video ref={video} autoPlay muted playsInline className={showCamera ? 'camera-preview' : 'camera-preview camera-hidden'} style={{ transform: options.mirror ? 'scaleX(-1)' : undefined }} aria-label={t.cameraPreview} />
       </section>
-      <section><h2>{t.microphone}</h2><label className="live-check"><CheckInput checked={micActive} disabled={!micActive && viewState !== 'ready'} onChange={event => { if (event.target.checked) void microphone.current?.start(micId).then(refreshDevices); else microphone.current?.stop(); }} />{t.microphone}</label>
+      <section><h2>{t.textLipSync}</h2><Input.TextArea rows={3} value={textLip} disabled={micActive} placeholder={t.textLipPlaceholder} onChange={event => { setTextLip(event.target.value); setTextLipActive(false); }} /><label>{t.textLipLanguage}<SelectInput value={textLipLanguage} disabled={micActive || textLipActive} onChange={event => { setTextLipLanguage(event.target.value as 'zh' | 'ja'); setTextLipActive(false); }}><option value="zh">中文（汉字／拼音）</option><option value="ja">日本語（かな）</option></SelectInput></label><label className="live-check"><CheckInput checked={textLipLoop} onChange={event => setTextLipLoop(event.target.checked)} />{t.textLipLoop}</label><div className="live-buttons"><Button type="primary" disabled={!textLip.trim() || micActive || viewState !== 'ready'} onClick={() => { avatarRef.current?.stopLipSync(); setTextLipActive(true); }}>{t.textLipPlay}</Button><Button disabled={!textLipActive} onClick={() => { avatarRef.current?.stopLipSync(); setTextLipActive(false); }}>{t.textLipStop}</Button></div><small>{t.textLipHelp}</small></section>
+      <section><h2>{t.microphone}</h2><label className="live-check"><CheckInput checked={micActive} disabled={textLipActive || (!micActive && viewState !== 'ready')} onChange={event => { if (event.target.checked) { avatarRef.current?.stopLipSync(); setTextLipActive(false); void microphone.current?.start(micId).then(refreshDevices); } else microphone.current?.stop(); }} />{t.microphone}</label>
         <SelectInput aria-label={t.microphone} value={micId} disabled={micActive} onChange={event => setMicId(event.target.value)}><option value="">{t.defaultDevice}</option>{devices.filter(device => device.kind === 'audioinput' && device.deviceId).map((device, i) => <option key={device.deviceId} value={device.deviceId}>{device.label || `${t.microphone} ${i + 1}`}</option>)}</SelectInput>
         <label>{t.gain}<RangeInput  min="0.25" max="5" step="0.05" value={gain} onChange={event => setGain(Number(event.target.value))} /></label><small role="status">{t[micState]}</small>
       </section>

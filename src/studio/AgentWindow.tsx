@@ -47,7 +47,8 @@ export function AgentWindow({ open, onOpenChange, children }: { open: boolean; o
     window.addEventListener('resize', keepInViewport);
     return () => window.removeEventListener('resize', keepInViewport);
   }, [expanded, position, size]);
-  const style = !expanded ? { ...(position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : {}), ...(size ? { width: size.width, height: size.height } : {}) } : undefined;
+  const desktopLayout = typeof window === 'undefined' || window.innerWidth > 600;
+  const style = !expanded && desktopLayout ? { ...(position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : {}), ...(size ? { width: size.width, height: size.height } : {}) } : undefined;
   return <>
     {!open && <Button className="agent-launcher" type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-label={zh ? '展开 Agent 对话' : 'Open agent conversation'}>Agent</Button>}
     <section ref={windowRef} className={`agent-window${expanded ? ' agent-window-expanded' : ''}`} hidden={!open}

@@ -262,8 +262,13 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     if (Math.max(rigModified, layersModified, source?.modified ?? 0) > reviewModified) result.issues.push('Review images are older than current inputs; render them again.');
   });
   try {
-    const signoff = JSON.parse(await readFile(join(project, 'review', 'visual-signoff.json'), 'utf8')) as { reviewModified?: number; approvedAt?: string };
-    if (signoff.reviewModified === reviewModified && typeof signoff.approvedAt === 'string' && !stages.find(stage => stage.state === 'invalid')) signoffAt = signoff.approvedAt;
+    const revisionFile = `visual-signoff-${String(reviewModified).replace('.', '_')}.json`;
+    const signoffBytes = await readFile(join(project, 'review', revisionFile), 'utf8').catch(error => {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
+      return readFile(join(project, 'review', 'visual-signoff.json'), 'utf8');
+    });
+    const signoff = JSON.parse(signoffBytes) as { reviewModified?: number; approvedAt?: string };
+    if (signoff.reviewModified === reviewModified && typeof signoff.approvedAt === 'string' && stages.every(stage => stage.state === 'observed')) signoffAt = signoff.approvedAt;
   } catch { /* A missing or stale signoff stays unverified. */ }
   const firstIncomplete = stages.find(stage => stage.state !== 'observed');
   const nextAction = firstIncomplete ? actionFor(firstIncomplete, name) : undefined;
@@ -284,10 +289,12 @@ export function productionStatusPlugin(root: string): Plugin {
         if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
         const result = await inspectProduction(root, name).catch(() => null);
         const review = result?.stages.find(stage => stage.id === 'review');
-        if (!result?.projectExists || !review || review.state !== 'observed' || review.issues.length) return reply(409, { error: 'Review artifacts are not ready or are stale.' });
+        if (!result?.projectExists || !review || result.stages.some(stage => stage.state !== 'observed')) return reply(409, { error: 'All production stages must be present and valid before visual signoff.' });
+        if (result.visualReview === 'approved') return reply(200, { approved: true });
         try {
           const repository = await realpath(root), project = join(repository, 'projects', name), manifest = await stat(join(project, 'review', 'poses.json'));
-          await writeFile(join(project, 'review', 'visual-signoff.json'), JSON.stringify({ version: 1, approvedAt: new Date().toISOString(), reviewModified: manifest.mtimeMs }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+          // Preserve earlier approvals; a rebuilt review gets a separate record.
+          await writeFile(join(project, 'review', `visual-signoff-${String(manifest.mtimeMs).replace('.', '_')}.json`), JSON.stringify({ version: 1, approvedAt: new Date().toISOString(), reviewModified: manifest.mtimeMs }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
           return reply(201, { approved: true });
         } catch { return reply(409, { error: 'Visual signoff already exists or could not be saved.' }); }
       }

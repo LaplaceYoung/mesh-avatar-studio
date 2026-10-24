@@ -44,6 +44,8 @@ export function LiveApp() {
   const controls = useRef({ options, gain, micState, cameraState }); controls.current = { options, gain, micState, cameraState };
   const textLipActiveRef = useRef(false); textLipActiveRef.current = textLipActive;
   const textLipLoopRef = useRef(false); textLipLoopRef.current = textLipLoop;
+  const textLipRef = useRef(''); textLipRef.current = textLip;
+  const textLipLanguageRef = useRef<'zh' | 'ja'>('zh'); textLipLanguageRef.current = textLipLanguage;
   const refreshDevices = () => { void navigator.mediaDevices?.enumerateDevices().then(setDevices).catch(() => undefined); };
   useEffect(() => {
     const capture = new CameraCapture(video.current!, (result, now) => pose.current.update(result, now), state => { setCameraState(state); if (state !== 'running') setTracking(false); });
@@ -75,7 +77,7 @@ export function LiveApp() {
     }, (avatar, now) => {
       // An expression alone also drives the stream view, including its fade back to neutral.
       if (controls.current.cameraState === 'running' || controls.current.micState === 'micOn' || avatar.getExpression().active) send(avatar.getParameters(), now);
-    }).then(value => { if (cancelled) value.destroy(); else { view = value; avatarRef.current = value.avatar; value.avatar.setLighting(lightRef.current); value.avatar.setExpression(expressionRef.current); setViewState('ready'); } }).catch(() => { if (!cancelled) setViewState('projectError'); });
+    }).then(value => { if (cancelled) value.destroy(); else { view = value; avatarRef.current = value.avatar; value.avatar.setLighting(lightRef.current); value.avatar.setExpression(expressionRef.current); if (textLipActiveRef.current && textLipRef.current.trim()) value.avatar.speak(textLipRef.current, { lang: textLipLanguageRef.current, loop: textLipLoopRef.current, speed: 7 }); setViewState('ready'); } }).catch(() => { if (!cancelled) setViewState('projectError'); });
     return () => { cancelled = true; clock.terminate(); view?.destroy(); avatarRef.current = null; };
   }, [settings.project, settings.fit]);
   useEffect(() => {

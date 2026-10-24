@@ -14,7 +14,12 @@ export function RegionEvidenceReview({ project, stage, open, onClose }: { projec
   const [reviewedFiles, setReviewedFiles] = useState<Record<string, string[]>>(stage?.reviewedFiles ?? {});
   const [loadedFiles, setLoadedFiles] = useState<Record<string, boolean>>({});
   const [reviewBusy, setReviewBusy] = useState(false);
-  useEffect(() => { setSelectedRegion(regions[0] ?? ''); setSelectedFile(overview ?? files[0] ?? ''); }, [overview, open, regions.join('|')]);
+  useEffect(() => {
+    const firstRegion = regions[0] ?? '';
+    const firstFiles = regionFiles(firstRegion);
+    setSelectedRegion(firstRegion);
+    setSelectedFile(firstFiles.find(file => file.endsWith('-grid.png')) ?? firstFiles[0] ?? overview ?? files[0] ?? '');
+  }, [overview, open, regions.join('|')]);
   useEffect(() => { setReviewed(stage?.reviewed ?? []); }, [stage?.reviewed]);
   useEffect(() => { setReviewedFiles(stage?.reviewedFiles ?? {}); }, [stage?.reviewedFiles]);
   useEffect(() => { setLoadedFiles({}); }, [selectedRegion, open]);

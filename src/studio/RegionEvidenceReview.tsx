@@ -27,6 +27,7 @@ export function RegionEvidenceReview({ project, stage, open, onClose }: { projec
   return <Drawer title={zh ? '区域证据审查' : 'Region evidence review'} placement="right" size="large" open={open} onClose={onClose} destroyOnHidden>
     <div className="pose-review">
       <Space wrap><strong>{project}</strong><Tag>{zh ? '坐标证据，不代表自动识别正确' : 'Coordinate evidence, not automatic recognition'}</Tag></Space>
+      <Alert type="info" title={zh ? '人工复核为可选记录，不阻断 Agent 自动绑定。文件校验通过不等于视觉质量通过。' : 'Human review is optional and does not block agent rigging. Artifact validity is not visual approval.'} />
       {stage?.state === 'invalid' && <Alert type="warning" title={zh ? '区域证据缺失或已过期。' : 'Region evidence is missing or stale.'} description={stage.issues.join(' · ')} />}
       {file ? <>
         <Select aria-label={zh ? '当前区域' : 'Current region'} value={selectedRegion} onChange={value => { setSelectedRegion(value); setSelectedFile(regionFiles(value).find(file => file.endsWith('-grid.png')) ?? regionFiles(value)[0] ?? overview ?? ''); }} options={regions.map(name => ({ value: name, label: `${reviewed.includes(name) ? '✓ ' : ''}${name}` }))} />

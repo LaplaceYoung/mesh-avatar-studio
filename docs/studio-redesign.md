@@ -282,3 +282,13 @@ recognition and not a quality score. They are shown before creation and included
 in the ACP task context so the Agent can decide whether to inspect framing,
 background and pale clothing before tracing regions. No source image is altered
 by this check.
+
+## Automation alignment correction
+
+Per-region human detail/grid acknowledgements are optional review provenance.
+They do not make otherwise valid region evidence invalid and do not gate agent
+rigging. The previous mandatory-click policy conflicted with upload-to-avatar
+ automation. Missing, stale, malformed and low-confidence evidence still needs
+correction; final human visual approval remains separate and is never inferred
+from artifact presence. A successful status response does not prove anatomy or
+motion quality. The existing review controls and private records are preserved.

@@ -19,12 +19,9 @@ const regionAliases = {
 function hasRegion(names: Set<string>, required: Set<string>) { return [...required].some(name => names.has(name)); }
 function actionFor(stage: ProductionStage, name: string) {
   const lowConfidence = stage.issues.find(issue => issue.startsWith('Low-confidence regions require visual review:'));
-  const regionReview = stage.issues.find(issue => issue.startsWith('Region evidence requires visual review:'));
   const instruction: Record<ProductionStage['id'], string> = {
     source: `使用创建任务提供的本地源图运行 uv run tools/new-project.py <source.png> ${name}，确认 source.png 与上传源图尺寸和 SHA-256 一致。`,
-    regions: regionReview
-      ? `先在 Studio 的区域证据审查中逐一打开 overview、detail 和 grid，确认这些区域的实际坐标和边界：${regionReview.replace('Region evidence requires visual review: ', '')}。每检查一个区域，就在审查界面标记为已检查；不要只读取文件或把 confidence 改高。完成全部区域后，重新检查 production-status，再进入绑定。`
-      : lowConfidence
+    regions: lowConfidence
       ? `先打开并逐张检查当前 work/vision-* 的 overview、detail 和 grid，重点复核 ${lowConfidence.replace('Low-confidence regions require visual review: ', '')}。只有实际查看局部坐标后，才能修正 regions.json 的 box/observation/confidence；再运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并重新检查 overview/detail/grid。不要把 low confidence 直接改成 high。`
       : `重新逐区查看 source.png，补齐核心区域后运行 uv run tools/vision-regions.py projects/${name} --regions projects/${name}/regions.json，并检查 overview/detail/grid。`,
     draft: `读取当前 regions.json 和匹配的 work/vision-* 证据包，完善 rig.draft.json，运行 validate-rig、overlay 和眼部放大叠加。`,
@@ -133,8 +130,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const reviewed = new Set(regionNames.filter(name => reviewedFiles[name]?.includes('detail') && reviewedFiles[name]?.includes('grid')));
     result.reviewed = [...reviewed];
     result.reviewedFiles = reviewedFiles;
-    const unreviewed = regionNames.filter(name => !reviewed.has(name));
-    if (unreviewed.length) result.issues.push(`Region evidence requires visual review: ${unreviewed.join(', ')}.`);
+    // Human review is optional provenance, not an automation prerequisite.
+    // Missing/stale evidence and uncertain regions remain artifact issues below.
     result.files.push(evidence.replace(project + sep, ''));
     await png(`${evidenceFolder.replace(project + sep, '')}/overview.png`, result);
     for (const region of manifest.regions) {

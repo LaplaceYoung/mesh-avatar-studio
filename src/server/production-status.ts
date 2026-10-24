@@ -148,7 +148,7 @@ export function productionStatusPlugin(root: string): Plugin {
   return { name: 'studio-production-status', apply: 'serve', configureServer(server) {
     server.middlewares.use(async (req, res, next) => {
       const url = new URL(req.url ?? '/', 'http://localhost');
-      if (!['/__studio/production-status', '/__studio/review-image', '/__studio/production-signoff'].includes(url.pathname)) return next();
+      if (!['/__studio/production-status', '/__studio/review-image', '/__studio/evidence-image', '/__studio/production-signoff'].includes(url.pathname)) return next();
       const reply = (code: number, body: object) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Cache-Control': 'no-store' }); res.end(JSON.stringify(body)); };
       if (!localRequest(req, req.method !== 'GET')) return reply(403, { error: 'Local same-origin requests only.' });
       const name = url.searchParams.get('project') ?? '';
@@ -182,6 +182,23 @@ export function productionStatusPlugin(root: string): Plugin {
           if (!bytes.subarray(0, 8).equals(signature)) return reply(422, { error: 'Invalid PNG signature.' });
           res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(bytes); return;
         } catch { return reply(404, { error: 'Review image unavailable; refresh the project status.' }); }
+      }
+      if (url.pathname === '/__studio/evidence-image') {
+        if (req.method !== 'GET') return reply(405, { error: 'Use GET.' });
+        const requested = (url.searchParams.get('file') ?? '').replaceAll('\\', '/');
+        try {
+          const result = await inspectProduction(root, name);
+          const regions = result.stages.find(stage => stage.id === 'regions');
+          const allowed = regions?.files.map(file => file.replaceAll('\\', '/')).filter(file => file.startsWith('work/')) ?? [];
+          if (!allowed.includes(requested) || !/^work\/vision-[a-f0-9]{12}\/[A-Za-z][A-Za-z0-9_-]{0,48}-(detail|grid)\.png$/.test(requested) && !/^work\/vision-[a-f0-9]{12}\/overview\.png$/.test(requested)) return reply(404, { error: 'Evidence image is not listed for the current source.' });
+          const repository = await realpath(root), project = join(repository, 'projects', name), actual = await realpath(join(project, requested));
+          if (!actual.startsWith(project + sep)) return reply(403, { error: 'Evidence image must stay in this project.' });
+          const info = await stat(actual);
+          if (!info.isFile() || info.size > 32 * 1024 * 1024) return reply(413, { error: 'Invalid evidence image size.' });
+          const bytes = await readFile(actual);
+          if (!bytes.subarray(0, 8).equals(signature)) return reply(422, { error: 'Invalid PNG signature.' });
+          res.writeHead(200, { 'Content-Type': 'image/png', 'Cache-Control': 'no-store', 'X-Content-Type-Options': 'nosniff' }); res.end(bytes); return;
+        } catch { return reply(404, { error: 'Evidence image unavailable; refresh the project status.' }); }
       }
       try { reply(200, await inspectProduction(root, name)); } catch { reply(500, { error: 'Could not inspect project files.' }); }
     });

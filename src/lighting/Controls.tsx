@@ -15,6 +15,7 @@ export function LightingControls({ value, onChange, language }: Props) {
   const sliders = (items: { key: Key; label: keyof typeof t; min: number; max: number }[]) => items.map(({ key, label, min, max }) =>
     <label className="lighting-slider" key={key}>{t[label]}<RangeInput disabled={!value.enabled} aria-label={t[label]}  min={min} max={max} step="0.01" value={value[key]} onChange={e => onChange({ ...value, [key]: Number(e.target.value) })} /><output>{value[key].toFixed(2)}</output></label>);
   return <div className="lighting-controls">
+    <p className="lighting-hint">默认光照已针对 2D 角色插画提前调优：开启后先整体观察效果，再按需微调。避免同时大幅修改明暗强度、光范围和轮廓光。</p>
     <label className="lighting-check"><CheckInput checked={value.enabled} onChange={e => onChange({ ...value, enabled: e.target.checked })} />{t.enabled}</label>
     <fieldset disabled={!value.enabled}>
       <legend>{t.light}</legend>

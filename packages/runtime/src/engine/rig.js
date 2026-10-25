@@ -217,7 +217,7 @@ export function createRig(rig) {
       const a = P.browAngle * 0.12 * w.brow;
       p[1] += (x - rig.face.brow.cx) * Math.sin(a);
     }
-    p[1] += P.mouthOpen * 3.5 * w.jaw;
+    p[1] += P.mouthOpen * 2.2 * w.jaw;
     // head turn, per part: nose and mouth travel further than the eyes, the far eye
     // narrows and the near eye widens, the ears and buns slide the other way
     const ax = P.angleX / 30, ay = P.angleY / 30;

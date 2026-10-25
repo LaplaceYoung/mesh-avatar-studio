@@ -82,7 +82,7 @@ uv run tools/grid.py projects/<name> --region x0,y0,x1,y1 --step 10 --out projec
 
 | Part | How to place it |
 |---|---|
-| head | Ellipse covering the whole head including hair and head accessories; centre slightly above the eyes. Pivot at the neck. `weightBand` starts just below the chin and ends near the collarbone. |
+| head | Ellipse covering the whole head including hair and head accessories; centre slightly above the eyes. Pivot at the neck. `weightBand` starts just below the chin and ends near the collar. Use a tight, smooth band so the chin follows the head instead of dragging the neck; avoid ending it too low. |
 | face | Small ellipses on nose, mouth, each eye, each visible ear, brow, jaw. |
 | eyes | `opening`: polygon along the visible eye white + iris, inside the lashes, 14–20 points, starting at the outer corner. `roi`: polygon 10–20 px outside the lashes and lower lid line. Use a 5 px grid for these. |
 | mouth | Line through the closed mouth (centre, angle, half length, bow) and an ellipse `area` a little larger than the lips. |
@@ -157,7 +157,7 @@ the rig is good enough: continue to Step 6, which removes them.
 
 ## Step 6 — Drawn variants (closed eyes, mouth shapes, expression eyes)
 
-Codex uses its built-in image generation (imagegen) for these variants.
+These variant images use the local **moss image** service (`/__studio/mosi-image`, authenticated by `MOSS_API_KEY`) instead of Codex imagegen. The Agent generates candidates from source.png plus each mask, reviews each output, rejects candidates that do not fit the character or mask, and only imports the accepted PNGs. moss image output quality is evaluated by the Agent, not blindly trusted.
 
 Blinking and talking look much better with drawn variants. Create the requests:
 

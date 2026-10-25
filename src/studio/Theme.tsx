@@ -17,10 +17,10 @@ export function StudioTheme({ children }: { children: ReactNode }) {
   return <Context.Provider value={{ dark, toggle: () => setDark(value => !value) }}>
     <ConfigProvider button={{ autoInsertSpace: false }} locale={{ zh: zhCN, en: enUS, ja: jaJP }[language]} theme={{
       algorithm: dark ? theme.darkAlgorithm : theme.defaultAlgorithm,
-      token: { colorPrimary: dark ? '#d58a60' : '#b65b37', borderRadius: 4, fontSize: 13, controlHeight: 32,
+      token: { colorPrimary: dark ? '#d58a60' : '#b65b37', borderRadius: 6, fontSize: 13, controlHeight: 32,
         fontFamily: '"Avenir Next", "PingFang SC", "Hiragino Sans GB", sans-serif',
-        colorBgLayout: dark ? '#181b1e' : '#eceeed', colorBgContainer: dark ? '#22262a' : '#fafbf9' },
-      components: { Button: { defaultShadow: 'none', primaryShadow: 'none' }, Tabs: { horizontalItemGutter: 20 }, Input: { activeShadow: 'none' }, Select: { activeOutlineColor: 'transparent' } },
+        colorBgLayout: dark ? '#181b1e' : '#efeee9', colorBgContainer: dark ? '#22262a' : '#fbfaf7' },
+      components: { Button: { defaultShadow: 'none', primaryShadow: 'none' }, Tabs: { horizontalItemGutter: 20 } },
     }}><App>{children}</App></ConfigProvider>
   </Context.Provider>;
 }

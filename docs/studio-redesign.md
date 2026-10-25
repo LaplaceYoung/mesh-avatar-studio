@@ -453,3 +453,19 @@ Codex check, all three installed adapters have actual startup/capability evidenc
 No prompt or private image was transmitted. This does not establish authentication
 for model inference, tool execution, permission handling or vision capability;
 those must be verified separately. No credentials were logged or saved.
+
+## Live Codex ACP tool round-trip
+
+A dedicated Codex ACP session received a synthetic diagnostic asking for exactly
+one shell invocation, `printf 'ACP_TOOL_OK_37\n'`, and a marker-only reply. The
+request explicitly prohibited reading files/environment/credentials, writes and
+network tools. Observed one tool_call, a completed tool_call_update, a final
+agent reply containing the marker, and complete with stopReason=end_turn.
+No permission request occurred; the diagnostic would have rejected any such
+request rather than automatically granting it. Sent stop and observed connection
+closure afterward. No image was supplied and no credential was logged.
+
+This verifies one actual model/tool/result round-trip over the local bridge,
+not permission-approval UI, file-writing workflows, vision or full production.
+It was a direct manual diagnostic, not an E2E suite. Other providers have startup
+verification only until equivalent inference/tool evidence is obtained.

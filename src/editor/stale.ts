@@ -6,7 +6,8 @@ export function layerSignature(rig: Rig) {
     head: { cx: rig.head.cx, cy: rig.head.cy, rx: rig.head.rx, ry: rig.head.ry },
     buns: rig.buns ?? {},
     body: { chest: rig.body.chest, shoulders: rig.body.shoulders },
-    eyes: rig.eyes,
+    // Crease opacity changes playback only, not extraction or layer geometry.
+    eyes: rig.eyes.map(eye => ({ opening: eye.opening, roi: eye.roi, x0: eye.x0, x1: eye.x1, top: eye.top, bot: eye.bot })),
     face: { brow: rig.face.brow, mouth: rig.face.mouth, nose: rig.face.nose },
     strands: (rig.strands ?? []).map(part => ({ nodes: part.nodes, sigma: part.sigma, max: part.max })),
     hand: rig.hand ? {

@@ -159,3 +159,10 @@ When present, opacity interpolates from 1 with the eye open to this value with
 the eye closed. Use 0 only after inspecting extracted crease-layer fragments;
 this is not a replacement for accurate ROI tracing. Inspect rest, half-closed
 and closed poses after setting it. Older runtimes ignore this optional field.
+
+In the Studio eye inspector, enable the optional control with its default closed
+opacity 0.55, then adjust within 0..1. The preview reinitializes with the edited
+rig. Opacity-only edits require saving the rig, not rebuilding extracted layers;
+changes to opening/ROI/curves still mark layers stale. Re-render pose evidence
+after saving before any new visual approval. This distinction avoids repeatedly
+running extraction while tuning a runtime-only appearance parameter.

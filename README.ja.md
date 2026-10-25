@@ -1,4 +1,4 @@
-# Mesh Avatar Studio
+# Mesh Avatar Studio（独立 fork）
 
 [English](README.md) · [简体中文](README.zh.md)
 

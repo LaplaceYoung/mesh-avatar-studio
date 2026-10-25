@@ -149,3 +149,5 @@ small,.muted { color:var(--studio-muted); }
 .review-comparison figure,.review-current-frame { margin:0; min-width:0; }
 .review-comparison figcaption,.review-current-frame figcaption { font-size:11px; color:var(--studio-muted); overflow-wrap:anywhere; margin-bottom:6px; }
 @media(max-width:600px) { .review-comparison { grid-template-columns:1fr; } }
+.eye-crease-setting { display:grid; gap:8px; padding-block:8px; }
+.eye-crease-setting small { font-size:11px; line-height:1.6; }

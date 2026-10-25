@@ -14,7 +14,7 @@ export function Menu({ summary, children, className, disabled, onOpen, detailsRe
   const open = scope ? scope.active === id : localOpen;
   const setOpen = (next: boolean) => { if (scope) { if (next) scope.setActive(id); else if (scope.active === id) scope.setActive(null); } else setLocalOpen(next); };
   useImperativeHandle(detailsRef, () => ({ get open() { return open; }, set open(value: boolean) { setOpen(value); } }));
-  return <Popover trigger="click" open={!disabled && open} onOpenChange={next => { setOpen(next); if (next) onOpen?.(); }} placement="bottomRight" content={<div className="studio-popover" onKeyDown={e => { if (e.key === 'Escape') { setOpen(false); document.getElementById(id)?.focus(); } }}>{children}</div>}>
-    <Button id={id} disabled={disabled} className={className} data-testid={props['data-testid']} aria-expanded={!disabled && open} onKeyDown={e => { if (e.key === 'Escape') setOpen(false); }}>{summary}</Button>
+  return <Popover trigger="click" open={!disabled && open} onOpenChange={next => { setOpen(next); if (next) onOpen?.(); }} placement="bottomRight" content={<div className="studio-popover" onKeyDown={e => { if (e.key === 'Escape' && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); setOpen(false); document.getElementById(id)?.focus(); } }}>{children}</div>}>
+    <Button id={id} disabled={disabled} className={className} data-testid={props['data-testid']} aria-expanded={!disabled && open} onKeyDown={e => { if (e.key === 'Escape' && open && !e.defaultPrevented) { e.preventDefault(); e.stopPropagation(); setOpen(false); } }}>{summary}</Button>
   </Popover>;
 }

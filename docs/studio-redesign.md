@@ -570,3 +570,10 @@ proceeding, successful/failed release and invalid names. These are not browser
 E2E tests. Limits: this is not a filesystem lock, does not coordinate multiple
 dev-server processes, and cannot constrain untagged chat or agent child processes
 that outlive the reported turn. No timeout forcibly frees an active turn.
+
+Escape ownership is now local: Ant Design drawers handle their own dismissal;
+the workspace no longer closes every overlay on any Escape key. Custom menu
+content consumes Escape and returns focus to its trigger. The floating Agent
+handles only unconsumed, non-composing Escape events originating inside its
+window, so portalled review dialogs do not also minimize it. Browser verification
+still needed for model-select popups, nested image previews and IME cancellation.

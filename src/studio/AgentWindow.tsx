@@ -68,7 +68,8 @@ export function AgentWindow({ open, onOpenChange, status, provider, children }: 
   useEffect(() => {
     if (!open) return;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape') return;
+      if (event.key !== 'Escape' || event.defaultPrevented || event.isComposing) return;
+      if (!(event.target instanceof Node) || !windowRef.current?.contains(event.target)) return;
       event.preventDefault();
       onOpenChange(false);
     };

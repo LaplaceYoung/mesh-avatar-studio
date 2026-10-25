@@ -252,7 +252,8 @@ function Workspace() {
   };
   useEffect(() => {
     const keyboard = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') { setHelp(false); setAgentOpen(false); if (openMenu.current) openMenu.current.open = false; }
+      // Drawers and the Agent window own Escape; do not close parent layers here.
+      if (event.defaultPrevented) return;
       if (!(event.ctrlKey || event.metaKey)) return;
       if (jobRef.current) { if (['s', 'z'].includes(event.key.toLowerCase())) event.preventDefault(); return; }
       const typing = event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement;

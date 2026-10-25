@@ -442,3 +442,14 @@ this run, so do not describe this as exit-event validation. This verifies Codex
 adapter startup and capability discovery only, not tool calls, permissions,
 vision processing, reconnects or a complete avatar production run. Session
 capabilities/tokens were held in process memory and not logged or committed.
+
+## Live Claude and Pi ACP initialization check
+
+Repeated the no-prompt local bridge check for Claude and Pi. Both acknowledged
+attachment and returned ready. Claude advertised mode/model/effort (thought_level);
+Pi advertised model/thought_level. Each dedicated diagnostic session received
+stop immediately after readiness and its socket closed. Together with the earlier
+Codex check, all three installed adapters have actual startup/capability evidence.
+No prompt or private image was transmitted. This does not establish authentication
+for model inference, tool execution, permission handling or vision capability;
+those must be verified separately. No credentials were logged or saved.

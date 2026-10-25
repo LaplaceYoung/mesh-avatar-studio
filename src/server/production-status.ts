@@ -247,6 +247,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     if (!reviewFiles.has('contact-sheet.png')) result.issues.push('Review contact-sheet.png is missing; render-poses must produce the full motion sheet.');
     if (![...reviewFiles].some(name => /-eyes\.png$/.test(name))) result.issues.push('Eye crop evidence is missing; inspect a rendered eyes crop before visual signoff.');
     if (![...reviewFiles].some(name => /-mouth\.png$/.test(name))) result.issues.push('Mouth crop evidence is missing; inspect a rendered mouth crop before visual signoff.');
+    if (!reviewFiles.has('eyes-sheet.png')) result.issues.push('Eye detail sheet is missing; inspect the complete eye-motion crop set before visual signoff.');
+    if (!reviewFiles.has('mouth-sheet.png')) result.issues.push('Mouth detail sheet is missing; inspect the complete mouth-motion crop set before visual signoff.');
     const reviewSizes = new Map<string, { width: number; height: number }>();
     for (const file of metadata.files) reviewSizes.set(file, await png(`review/${file}`, result));
     const reviewDigest = createHash('sha256');

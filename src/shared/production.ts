@@ -10,6 +10,6 @@ export type ProductionStage = {
 };
 export type ProductionRegionSummary = { name: string; confidence: 'low' | 'medium' | 'high'; step: number; core: boolean; detailReviewed: boolean; gridReviewed: boolean };
 export type ProductionNextAction = { stage: ProductionStage['id']; reason: string; instruction: string };
-export type ProductionStatus = { sourceSha256?: string; project: string; projectExists: boolean; checkedAt: string; stages: ProductionStage[]; previewAvailable: boolean; visualReview: 'unverified' | 'approved'; visualReviewAt?: string; nextAction?: ProductionNextAction };
+export type ProductionStatus = { sourceSha256?: string; reviewSha256?: string; project: string; projectExists: boolean; checkedAt: string; stages: ProductionStage[]; previewAvailable: boolean; visualReview: 'unverified' | 'approved'; visualReviewAt?: string; nextAction?: ProductionNextAction };
 export type CreationTask = { projectName: string; source: string; autoContinue?: boolean };
 export type ProductionActivity = { projectName: string; state: 'starting' | 'working' | 'completed' | 'failed'; message?: string; at: string };

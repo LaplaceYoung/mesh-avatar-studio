@@ -497,3 +497,13 @@ these runs. Do not advertise Pi tool execution as available from startup or
 command advertisement alone. Claude and Codex have successful synthetic tool
 round-trips; Pi remains unresolved. No raw Pi reply, credential, image or
 project data was saved.
+
+Visual approvals now use a SHA-256 fingerprint of review/poses.json and all
+manifest-listed review PNG bytes (sorted by filename). Approval filenames are
+keyed by that fingerprint rather than mtime. Older timestamp-only records remain
+on disk but do not approve current evidence; explicit re-approval is required.
+A local diagnostic altered manifest whitespace while restoring its mtime:
+production-status returned a different fingerprint, then the original fingerprint
+after the original bytes were restored. No visual approval was written. Reading
+all review bytes each inspection adds I/O; this is not a filesystem snapshot and
+does not guarantee atomicity against concurrent agent writes.

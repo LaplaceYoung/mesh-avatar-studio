@@ -100,6 +100,7 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   }
   let source: { width: number; height: number; modified: number } | undefined;
   let rigModified = 0, layersModified = 0, reviewModified = 0, signoffAt: string | undefined;
+  let reviewSha256: string | undefined;
   let sourceSha256: string | undefined;
   await stage('source', async result => { source = await png('source.png', result); sourceSha256 = await sourceHash(); });
   await stage('regions', async result => {
@@ -245,6 +246,10 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     if (![...reviewFiles].some(name => /-mouth\.png$/.test(name))) result.issues.push('Mouth crop evidence is missing; inspect a rendered mouth crop before visual signoff.');
     const reviewSizes = new Map<string, { width: number; height: number }>();
     for (const file of metadata.files) reviewSizes.set(file, await png(`review/${file}`, result));
+    const reviewDigest = createHash('sha256');
+    reviewDigest.update(await readFile((await checkedFile('review/poses.json', 2 * 1024 * 1024)).actual));
+    for (const file of [...metadata.files].sort()) reviewDigest.update(file).update(await readFile((await checkedFile(`review/${file}`, 64 * 1024 * 1024)).actual));
+    reviewSha256 = reviewDigest.digest('hex');
     if (Number.isInteger(renderWidth) && Number.isInteger(renderHeight)) {
       for (const file of metadata.files as string[]) {
         const size = reviewSizes.get(file);
@@ -263,17 +268,15 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     if (Math.max(rigModified, layersModified, source?.modified ?? 0) > reviewModified) result.issues.push('Review images are older than current inputs; render them again.');
   });
   try {
-    const revisionFile = `visual-signoff-${String(reviewModified).replace('.', '_')}.json`;
-    const signoffBytes = await readFile(join(project, 'review', revisionFile), 'utf8').catch(error => {
-      if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
-      return readFile(join(project, 'review', 'visual-signoff.json'), 'utf8');
-    });
+    if (!reviewSha256) throw new Error('Review fingerprint unavailable.');
+    const revisionFile = `visual-signoff-${reviewSha256}.json`;
+    const signoffBytes = await readFile((await checkedFile(`review/${revisionFile}`, 8192)).actual, 'utf8');
     const signoff = JSON.parse(signoffBytes) as { reviewModified?: number; approvedAt?: string };
-    if (signoff.reviewModified === reviewModified && typeof signoff.approvedAt === 'string' && stages.every(stage => stage.state === 'observed')) signoffAt = signoff.approvedAt;
+    if ((signoff as { reviewSha256?: unknown }).reviewSha256 === reviewSha256 && typeof signoff.approvedAt === 'string' && stages.every(stage => stage.state === 'observed')) signoffAt = signoff.approvedAt;
   } catch { /* A missing or stale signoff stays unverified. */ }
   const firstIncomplete = stages.find(stage => stage.state !== 'observed');
   const nextAction = firstIncomplete ? actionFor(firstIncomplete, name) : undefined;
-  return { sourceSha256, project: name, projectExists, checkedAt: new Date().toISOString(), stages,
+  return { sourceSha256, reviewSha256, project: name, projectExists, checkedAt: new Date().toISOString(), stages,
     previewAvailable: ['source', 'rig', 'layers'].every(id => stages.some(stage => stage.id === id && stage.state === 'observed')),
     visualReview: signoffAt ? 'approved' : 'unverified', ...(signoffAt ? { visualReviewAt: signoffAt } : {}), ...(nextAction ? { nextAction } : {}) };
 }
@@ -293,9 +296,12 @@ export function productionStatusPlugin(root: string): Plugin {
         if (!result?.projectExists || !review || result.stages.some(stage => stage.state !== 'observed')) return reply(409, { error: 'All production stages must be present and valid before visual signoff.' });
         if (result.visualReview === 'approved') return reply(200, { approved: true });
         try {
-          const repository = await realpath(root), project = join(repository, 'projects', name), manifest = await stat(join(project, 'review', 'poses.json'));
+          const repository = await realpath(root), project = join(repository, 'projects', name);
           // Preserve earlier approvals; a rebuilt review gets a separate record.
-          await writeFile(join(project, 'review', `visual-signoff-${String(manifest.mtimeMs).replace('.', '_')}.json`), JSON.stringify({ version: 1, approvedAt: new Date().toISOString(), reviewModified: manifest.mtimeMs }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
+          if (!result.reviewSha256) return reply(409, { error: 'Review fingerprint unavailable.' });
+          const directory = await realpath(join(project, 'review'));
+          if (!directory.startsWith(project + sep)) return reply(403, { error: 'Review directory must stay in the project.' });
+          await writeFile(join(directory, `visual-signoff-${result.reviewSha256}.json`), JSON.stringify({ version: 2, approvedAt: new Date().toISOString(), reviewSha256: result.reviewSha256 }, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
           return reply(201, { approved: true });
         } catch { return reply(409, { error: 'Visual signoff already exists or could not be saved.' }); }
       }

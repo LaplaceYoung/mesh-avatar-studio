@@ -2,6 +2,7 @@ export type Point = [number, number];
 export type Band = [number, number];
 export interface Ellipse { cx: number; cy: number; rx: number; ry: number }
 export interface Eye {
+  creaseClosedOpacity?: number;
   opening: Point[];
   roi: Point[];
   x0: number;

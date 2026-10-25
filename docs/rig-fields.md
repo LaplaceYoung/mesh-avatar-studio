@@ -150,3 +150,12 @@ the engine mapping. Do not copy the example illustration's coordinates into a ne
 Draft validation accepts omitted `x0/x1/top/bot` only as a complete group; supplying some of
 the four fields is an error. Complete rigs always require all four. Changing eye geometry
 requires rebuilding; old sampled curves cannot reconstruct new image pixels.
+
+### Optional closed-eye crease opacity
+
+`eyes[i].creaseClosedOpacity` is an optional number from 0 to 1. When absent,
+the existing runtime behavior is unchanged (crease opacity 0.55 at full closure).
+When present, opacity interpolates from 1 with the eye open to this value with
+the eye closed. Use 0 only after inspecting extracted crease-layer fragments;
+this is not a replacement for accurate ROI tracing. Inspect rest, half-closed
+and closed poses after setting it. Older runtimes ignore this optional field.

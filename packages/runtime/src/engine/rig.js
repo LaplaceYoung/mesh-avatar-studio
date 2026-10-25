@@ -78,10 +78,10 @@ export function createRig(rig) {
 
   // The lower lash fades out as smiling eyes close, so the arc reads as one line, not two;
   // the crease softens as the lid stretches.
-  function eyePartAlpha(part, open, smile) {
+  function eyePartAlpha(part, open, smile, eye) {
     const b = Math.min(1, Math.max(0, 1 - open));
     if (part === 'low') return 1 - Math.min(1, b * smile * 1.2);
-    if (part === 'crease') return 1 - 0.45 * b;
+    if (part === 'crease') return eye?.creaseClosedOpacity === undefined ? 1 - 0.45 * b : 1 - (1 - eye.creaseClosedOpacity) * b;
     return 1;
   }
 

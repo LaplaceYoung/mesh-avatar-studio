@@ -175,7 +175,7 @@ export async function createMeshAvatarImpl(canvas, options) {
     for (const ep of eyeParts) {
       const open = eyeOpenFor(ep.eye === 0 ? P.eyeROpen : P.eyeLOpen);
       const smile = ep.eye === 0 ? P.eyeSmile : (P.eyeSmileL ?? P.eyeSmile);
-      ep.layer.alpha = eyePartAlpha(ep.part, open, smile);
+      ep.layer.alpha = eyePartAlpha(ep.part, open, smile, ep.e);
       const r = ep.mesh.rest, o = ep.mesh.pos;
       for (let k = 0; k < ep.W.length; k++) {
         const x = r[k * 2], y = r[k * 2 + 1];

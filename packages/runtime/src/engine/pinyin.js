@@ -26,7 +26,7 @@ const ONSETS = ['zh', 'ch', 'sh', 'b', 'p', 'm', 'f', 'd', 't', 'n', 'l', 'g', '
 // Multi-char finals first so the regex above matches longest first.
 const FINALS = ['iang', 'iong', 'uang', 'ueng', 'uan', 'ian', 'ang', 'eng', 'ing', 'ong',
   'iao', 'uai', 'van', 'vn', 'ua', 'uo', 'ia', 'ie', 'iu', 'in', 'ai', 'ei', 'ao', 'ou',
-  'un', 'en', 'an', 've', 'er', 'a', 'o', 'e', 'i', 'u', 'v'];
+  'ui', 'ue', 'un', 'en', 'an', 've', 'er', 'a', 'o', 'e', 'i', 'u', 'v'];
 // dominant vowel target for each final — see VOWELS for the shape each key holds
 const FINAL_SHAPE = {
   a: ['a', null], ai: ['a', null], an: ['a', null], ang: ['a', null], ao: ['a', null],
@@ -82,8 +82,12 @@ function* syllablesFrom(pinyin) {
 
 function pushSyllables(out, latin, mora) {
   for (const { onset, final } of syllablesFrom(latin)) {
-    const nasal = /n$|ng$/.test(final) || final === 'vn';
-    const shape = FINAL_SHAPE[final] ?? ['a', null];
+    // Pinyin omits the umlaut after j/q/x and in yu/yuan/yun. Keep the
+    // written spelling for token boundaries, but recover the rounded vowel.
+    const pronouncedFinal = ['j', 'q', 'x', 'y'].includes(onset)
+      ? ({ u: 'v', ue: 've', un: 'vn', uan: 'van' }[final] ?? final) : final;
+    const nasal = /n$|ng$/.test(pronouncedFinal) || pronouncedFinal === 'vn';
+    const shape = FINAL_SHAPE[pronouncedFinal] ?? ['a', null];
     out.push({ vowel: shape[0], dur: mora, onset: ONSET_LIPS.has(onset) ? 'lips' : onset ? 'consonant' : null, nasal, glide: shape[1] });
   }
 }

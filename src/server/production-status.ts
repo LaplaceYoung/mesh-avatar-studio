@@ -150,6 +150,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     const regionNames = regions.map(region => region.name as string);
     result.required = regionNames;
     const manifestRelative = evidence.replace(project + sep, '').replaceAll(sep, '/');
+    const manifestFile = await checkedFile(manifestRelative, 2 * 1024 * 1024);
+    result.revision = createHash('sha256').update(await readFile(manifestFile.actual)).digest('hex');
     const reviewedFiles: Record<string, string[]> = {};
     try {
       const review = JSON.parse(await readFile(join(project, 'regions-review.json'), 'utf8')) as { sourceSha256?: unknown; manifest?: unknown; files?: unknown };

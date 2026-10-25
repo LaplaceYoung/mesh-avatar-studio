@@ -547,3 +547,11 @@ review/eyes-sheet.png, review/mouth-sheet.png and review/contact-sheet.png. The
 returned content revision was a 64-character SHA-256 fingerprint. This confirms
 render output and gate consistency only; no visual approval was written and the
 private diagnostic project was not committed.
+
+Cross-tab lease notifications now read the current storage value instead of
+trusting delayed storage-event payloads. Another tab releasing a lease no longer
+silently deletes this tab's pending prompt. Immediately before prompt dispatch,
+the queue checks/acquires the lease again; a foreign live lease cancels the local
+queue with a failed activity so the creator can recover. This remains a best-effort
+localStorage lease, not atomic cross-process exclusion; simultaneous acquisition
+requires server-side coordination to guarantee single-writer behavior.

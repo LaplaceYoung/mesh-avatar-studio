@@ -81,16 +81,14 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   useEffect(() => {
     const receive = (event: StorageEvent) => {
       if (event.key !== LOCK_KEY) return;
-      if (event.newValue) {
-        try { const lock = JSON.parse(event.newValue); if (lock.owner !== TAB_ID && Number(lock.expiresAt) > Date.now()) setForeignLock(lock); } catch { /* Ignore malformed cross-tab state. */ }
-      } else {
-        setForeignLock(undefined);
-        if (pendingRef.current && !productionTurn.current) { pendingRef.current = undefined; setPendingCreation(undefined); setError(zh ? '其他标签页已释放制作租约，可以重新提交。' : 'Another tab released the production lease; you can submit again.'); }
-      }
+      // Storage events can arrive after a newer lease has already been written.
+      // Refresh the notice from current storage; never discard a local prompt.
+      const lock = readLock();
+      setForeignLock(lock?.owner && lock.owner !== TAB_ID && Number(lock.expiresAt) > Date.now() ? lock : undefined);
     };
     window.addEventListener('storage', receive);
     return () => window.removeEventListener('storage', receive);
-  }, [zh]);
+  }, []);
   useEffect(() => {
     if (!foreignLock?.expiresAt) return;
     const timer = setInterval(() => { setLockClock(value => value + 1); if (Number(foreignLock.expiresAt) <= Date.now()) setForeignLock(undefined); }, 1000);
@@ -130,6 +128,10 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   useEffect(() => {
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
+    if (!acquireLock(pending.projectName)) {
+      failProduction(zh ? '发送前发现另一标签页持有制作租约，已取消本次排队；请等待后重试。' : 'Another tab holds the production lease. This queued submission was cancelled; retry after it finishes.');
+      return;
+    }
     // Consume before sending. Reconnection must not silently duplicate a creation request.
     pendingRef.current = undefined; setPendingCreation(undefined); productionToolObserved.current = false; productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName, source: pending.source })); savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: pending.projectName, expiresAt: Date.now() + LOCK_TTL })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
     socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));

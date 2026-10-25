@@ -62,7 +62,7 @@ export function agentBridge(root: string): Plugin {
         sessions.set(session.id, session);
         session.timer = setTimeout(() => destroy(session), 300_000);
         // Initialize after returning the capability, so startup errors remain visible in the UI.
-        void agent.initialize().catch(error => { session.exit = 1; emit(session, { type: 'error', message: String(error) }); agent.close(); });
+        void agent.initialize().catch(error => { session.exit = 1; emit(session, { type: 'error', message: String(error) }); agent.close(); emit(session, { type: 'exit', code: 1 }); });
         json(201, { id: session.id, token: session.token, provider });
       } catch (error) { json(500, { error: error instanceof Error ? error.message : 'Could not start agent.' }); }
       finally { if (reserved) starting--; }

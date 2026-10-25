@@ -36,11 +36,11 @@ type Event = { type: string; configOptions?: SessionConfigOption[]; session?: { 
 const labels = { claude: 'Claude Code', codex: 'Codex', pi: 'Pi' };
 export function AgentDock({ project, selection, onRefresh }: { project: string; selection?: string | null; onRefresh(): void }) {
   const { language } = useI18n(), zh = language === 'zh';
-  const [provider, setProvider] = useState<Provider>('claude');
+  const [initial] = useState(() => ({ session: readSavedSession(), turn: readSavedTurn() }));
+  const savedSession = initial.session, savedTurn = initial.turn;
+  const [provider, setProvider] = useState<Provider>(savedSession?.provider ?? 'claude');
   const [providers, setProviders] = useState<{ id: Provider; available: boolean }[]>([]);
-  const [session, setSession] = useState<Session | undefined>(readSavedSession);
-  const savedSession = readSavedSession();
-  const savedTurn = readSavedTurn();
+  const [session, setSession] = useState<Session | undefined>(savedSession);
   const [status, setStatus] = useState(() => savedSession ? 'starting' : 'idle');
   const [pendingCreation, setPendingCreation] = useState<{ prompt: string; projectName: string; source: string; autoContinue?: boolean }>();
   const pendingRef = useRef<typeof pendingCreation>(undefined);
@@ -121,7 +121,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       window.dispatchEvent(new CustomEvent('studio:creation-task', { detail: { projectName: value.projectName, source: value.source, autoContinue: value.autoContinue === true } }));
       // A confirmed creation task owns the next connection. Starting ACP here
       // removes an avoidable second click while keeping provider choice explicit.
-      if (!session && status === 'idle') void start();
+      if ((!session && status === 'idle') || status === 'exited') void start();
     };
     window.addEventListener('studio:agent-start', receive);
     return () => window.removeEventListener('studio:agent-start', receive);

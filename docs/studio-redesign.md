@@ -514,3 +514,20 @@ to end_turn. This explains why end_turn is insufficient evidence, but does not
 identify the original underlying RPC failure. Production turns with no observed
 tool activity now report unverified execution and do not auto-continue. Ordinary
 chat is unchanged; a tool event alone still does not prove artifact correctness.
+
+## Pi underlying inference failure identified
+
+A direct ephemeral Pi RPC diagnostic (no files/images supplied, no tool use
+requested) accepted the prompt, then emitted an assistant message_end with
+stopReason=error and HTTP 403: Insufficient account balance (permission_error).
+The process was stopped after settlement. The configured provider therefore
+cannot currently complete this inference request; executable availability and
+ACP initialization do not establish account readiness. No billing, authentication
+or model configuration was changed. This is not evidence that Pi lacks shell tools.
+
+The installed adapter handles text_delta/thinking_delta/toolcall updates but
+its message_end error is not surfaced through the observed ACP output. Its
+settlement maps non-cancelled termination to end_turn. Together these explain
+the observed startup text followed by apparent normal completion. Until the
+account/provider issue is resolved, use an independently verified provider for
+production; do not automatically retry this failure or silently switch models.

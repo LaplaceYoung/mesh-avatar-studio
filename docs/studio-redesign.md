@@ -483,3 +483,17 @@ Both dedicated sessions were stopped and their sockets closed. No capability
 tokens were logged. Claude and Codex now have one successful actual tool
 round-trip each; Pi has startup evidence only. None establishes avatar vision
 accuracy, permission-approval interaction or the full production workflow.
+
+## Pi ACP execution follow-up
+
+The first Pi tool diagnostic used a no-tools prompt, so its zero tool calls were
+not meaningful. A second prompt explicitly required one exact shell printf and
+marker-only output; Pi still completed with `end_turn`, zero tool calls, zero
+permissions and no marker. A third no-tools diagnostic observed two
+`session_info_update`, two `usage_update`, one `available_commands_update` and
+one assistant message, with zero tool calls. This means Pi is publishing an
+available-command update but did not execute the requested shell operation in
+these runs. Do not advertise Pi tool execution as available from startup or
+command advertisement alone. Claude and Codex have successful synthetic tool
+round-trips; Pi remains unresolved. No raw Pi reply, credential, image or
+project data was saved.

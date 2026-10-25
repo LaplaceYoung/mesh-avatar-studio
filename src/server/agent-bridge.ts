@@ -83,7 +83,7 @@ export function agentBridge(root: string): Plugin {
               if (message.type !== 'attach' || !candidate || !matchesToken(candidate.token, message.token)) { client.close(1008, 'Invalid session'); return; }
               session = candidate; clearTimeout(authTimer); clearTimeout(session.timer); session.clients.add(client);
               client.send(JSON.stringify({ type: 'replay', events: session.events }));
-              client.send(JSON.stringify({ type: 'attached', provider: session.provider }));
+              client.send(JSON.stringify({ type: 'attached', provider: session.provider, ...session.agent.snapshot() }));
               if (session.exit !== undefined) client.send(JSON.stringify({ type: 'exit', code: session.exit }));
               return;
             }

@@ -143,6 +143,16 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     let stableConnectionTimer: ReturnType<typeof setTimeout> | undefined;
     const apply = (event: Event, replaying = false) => {
       if (event.type === 'attached' && !replaying) {
+        if (event.state) setStatus(event.state);
+        if (event.configOptions) setConfig(event.configOptions);
+        // Historical completions must not end the currently running turn.
+        // A terminal snapshot requires explicit resumption, never prompt replay.
+        if (productionTurn.current && (event.state === 'ready' || event.state === 'exited')) {
+          const projectName = clearProductionTurn();
+          emitActivity('failed', zh ? '重连后发现原回合已结束；请检查产物后手动继续，不会自动重复提交。' : 'The original turn ended while disconnected. Inspect artifacts and resume manually; no prompt was replayed.', projectName);
+          window.dispatchEvent(new Event('studio:production-refresh'));
+        }
+
         // Briefly opening a socket is not recovery. Reset the retry budget
         // only after the authenticated attachment remains stable.
         clearTimeout(stableConnectionTimer);
@@ -152,15 +162,6 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
         setEntries([]); setPermissions([]); streamId.current = null;
         const events = event.events ?? [];
         for (const item of events) apply(item, true);
-        // Historical completions must not end the currently running turn.
-        // A terminal snapshot requires explicit resumption, never prompt replay.
-        const latestState = [...events].reverse().find(item => item.type === 'state');
-        const last = events.at(-1);
-        if (productionTurn.current && (latestState?.state === 'ready' || latestState?.state === 'exited' || last?.type === 'exit')) {
-          const projectName = clearProductionTurn();
-          emitActivity('failed', zh ? '重连后发现原回合已结束；请检查产物后手动继续，不会自动重复提交。' : 'The original turn ended while disconnected. Inspect artifacts and resume manually; no prompt was replayed.', projectName);
-          window.dispatchEvent(new Event('studio:production-refresh'));
-        }
         return;
       }
       if (event.type === 'ready') { setStatus('ready'); setConfig(event.session?.configOptions ?? []); }

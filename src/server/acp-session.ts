@@ -49,6 +49,7 @@ export class AcpSession {
       this.emit({ type: 'ready', agent: initialized.agentInfo, session });
     } finally { clearTimeout(timeout); }
   }
+  snapshot() { return { state: this.getState(), configOptions: this.config, toolCallCount: this.turnToolIds.size }; }
   getState(): 'starting' | 'working' | 'ready' | 'exited' {
     if (this.disposed) return 'exited';
     if (!this.sessionId) return 'starting';

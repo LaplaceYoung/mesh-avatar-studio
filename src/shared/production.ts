@@ -2,6 +2,7 @@ export type ProductionStage = {
   id: 'source' | 'regions' | 'draft' | 'rig' | 'layers' | 'review';
   state: 'missing' | 'observed' | 'invalid';
   files: string[];
+  revision?: string;
   issues: string[];
   reviewed?: string[];
   required?: string[];

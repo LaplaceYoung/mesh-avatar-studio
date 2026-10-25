@@ -250,6 +250,7 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     reviewDigest.update(await readFile((await checkedFile('review/poses.json', 2 * 1024 * 1024)).actual));
     for (const file of [...metadata.files].sort()) reviewDigest.update(file).update(await readFile((await checkedFile(`review/${file}`, 64 * 1024 * 1024)).actual));
     reviewSha256 = reviewDigest.digest('hex');
+    result.revision = reviewSha256;
     if (Number.isInteger(renderWidth) && Number.isInteger(renderHeight)) {
       for (const file of metadata.files as string[]) {
         const size = reviewSizes.get(file);

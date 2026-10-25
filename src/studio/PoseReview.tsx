@@ -14,22 +14,28 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
   const [issue, setIssue] = useState(''), [area, setArea] = useState('eyes');
   const [revision, setRevision] = useState(0);
   const [compare, setCompare] = useState(false);
+  const [noteRevision, setNoteRevision] = useState<string>();
   useEffect(() => { setSelected(''); }, [project]);
   const file = files.includes(selected) ? selected : files.find(file => file.endsWith('contact-sheet.png')) ?? files[0];
   const noteKey = `studio-review-note-v2:${project}:${file ?? 'none'}`;
   useEffect(() => {
     try {
       const saved = JSON.parse(readPreference(noteKey) ?? 'null');
+      setNoteRevision(typeof saved?.revision === 'string' ? saved.revision : undefined);
       setIssue(typeof saved?.issue === 'string' ? saved.issue : '');
       setArea(['eyes', 'mouth', 'hair', 'head', 'body', 'other'].includes(saved?.area) ? saved.area : 'eyes');
-    } catch { setIssue(''); setArea('eyes'); }
+    } catch { setIssue(''); setArea('eyes'); setNoteRevision(undefined); }
   }, [noteKey]);
-  const saveNote = (text: string, region: string) => savePreference(noteKey, JSON.stringify({ issue: text, area: region }));
+  const saveNote = (text: string, region: string) => {
+    setNoteRevision(stage?.revision);
+    savePreference(noteKey, JSON.stringify({ issue: text, area: region, revision: stage?.revision }));
+  };
+  const staleNote = !!issue.trim() && (!stage?.revision || noteRevision !== stage.revision);
   const legacyNote = readPreference(`studio-review-note:${project}`);
   const areas = zh ? { eyes: '眼睛 / 闭眼残留', mouth: '嘴部 / 下巴拉伸', hair: '头发 / 面部遮挡', head: '转头 / 耳朵破损', body: '身体 / 饰品摆动', other: '其他问题' } : { eyes: 'Eyes / blinking', mouth: 'Mouth / chin', hair: 'Hair / face overlap', head: 'Head turn / ears', body: 'Body / accessories', other: 'Other' };
   const contactSheet = files.find(value => value.endsWith('contact-sheet.png'));
   const navigation = reviewNavigation(files, file);
-  const imageUrl = (value: string) => `/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(value.slice('review/'.length))}&revision=${revision}`;
+  const imageUrl = (value: string) => `/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(value.slice('review/'.length))}&revision=${stage?.revision ?? 'unknown'}-${revision}`;
   const baseline = compare && navigation.baseline !== file ? navigation.baseline : undefined;
   const quickFiles = [
     { key: 'contact', label: zh ? '总览' : 'Contact sheet', file: contactSheet },
@@ -82,7 +88,8 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
       <small className="muted">{zh ? '反馈按当前图片分别保存；切换动作或裁剪图会切换对应草稿。' : 'Feedback is saved per image. Switching poses or crops loads that image’s draft.'}</small>
       {legacyNote && <Alert type="info" title={zh ? '保留了一条未绑定图片的旧反馈' : 'An older unassigned project note is preserved'} description={legacyNote} action={<Button disabled={!file || !!issue.trim()} onClick={() => { setIssue(legacyNote); saveNote(legacyNote, area); }}>{zh ? '复制到当前图片' : 'Copy to this image'}</Button>} />}
       <Input.TextArea aria-label={zh ? '具体缺陷' : 'Observed defect'} value={issue} rows={4} placeholder={zh ? '例如：turn-left.png 中左眼角露出白色裂缝，闭眼图仍能看到虹膜。请描述你实际看见的问题。' : 'Describe the defect you can actually see, including the frame and location.'} onChange={event => { setIssue(event.target.value); saveNote(event.target.value, area); }} />
-      <Button type="primary" disabled={!issue.trim() || !file} onClick={() => {
+      {staleNote && <Alert type="warning" title={zh ? '反馈来自旧版本或尚未绑定版本' : 'Feedback belongs to an older or unknown revision'} description={zh ? '图片可能已经重新渲染。请重新检查后确认缺陷仍然存在，再交给 Agent。' : 'Images may have been rendered again. Recheck the defect before sending it to the Agent.'} action={<Button disabled={!stage?.revision} onClick={() => saveNote(issue, area)}>{zh ? '已复查，沿用反馈' : 'Rechecked; keep feedback'}</Button>} />}
+      <Button type="primary" disabled={!issue.trim() || !file || staleNote} onClick={() => {
         const prompt = `请修正 projects/${project} 的姿态缺陷。\n用户查看的文件：projects/${project}/${file}\n问题区域：${areas[area as keyof typeof areas]}\n实际反馈：${issue.trim()}\n\n先读取当前原图、绑定及指定审查图，针对问题部位生成局部坐标网格和叠加图，说明根因再局部修改。不要覆盖用户无关改动。重新构建图层并渲染姿态，查看修改前后是否消除了缺陷，以及是否引入新裂缝。最多三轮，失败如实报告。不要因为工具执行成功就宣称视觉质量通过。未经另行授权，不调用外部生图服务。`;
         const accepted = window.dispatchEvent(new CustomEvent('studio:agent-start', { cancelable: true, detail: { prompt, projectName: project, source: `projects/${project}/source.png` } }));
         if (accepted) onClose();

@@ -469,3 +469,17 @@ This verifies one actual model/tool/result round-trip over the local bridge,
 not permission-approval UI, file-writing workflows, vision or full production.
 It was a direct manual diagnostic, not an E2E suite. Other providers have startup
 verification only until equivalent inference/tool evidence is obtained.
+
+## Live Claude / Pi tool capability check
+
+Used the same synthetic printf-only prompt as the Codex diagnostic, with no
+requested file reads, writes, image transfer or network tools. Claude emitted one
+tool call and completed status, returned the expected ACP_TOOL_OK_37 marker,
+and ended with end_turn. No permission request occurred. Pi returned end_turn
+but emitted zero tool calls and did not return the marker. Therefore Pi tool
+execution is NOT verified; ready/end_turn alone must not be described as a
+successful task. The precise Pi failure reason was not captured in this run.
+Both dedicated sessions were stopped and their sockets closed. No capability
+tokens were logged. Claude and Codex now have one successful actual tool
+round-trip each; Pi has startup evidence only. None establishes avatar vision
+accuracy, permission-approval interaction or the full production workflow.

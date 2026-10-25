@@ -53,12 +53,21 @@ void VOWELS;
 export function skippedPinyinCharacters(text) {
   const out = [];
   const map = pinyinMap();
-  for (const c of text) {
+  let latin = '';
+  const flush = () => {
+    let consumed = 0;
+    for (const { onset, final } of syllablesFrom(normalizeLatin(latin))) consumed += onset.length + final.length;
+    for (const c of [...latin].slice(consumed)) if (!out.includes(c)) out.push(c);
+    latin = '';
+  };
+  for (const c of text.normalize('NFC')) {
+    if (/[a-zA-Z]/.test(c) || TONE_MARKS.has(c)) { latin += c; continue; }
+    flush();
     if (/\s|，。！？；：、“”‘’（）《》〈〉【】…—,.!?;:'"()\[\]<>-/.test(c)) continue;
-    if (/[a-zA-Z]/.test(c) || TONE_MARKS.has(c)) continue; // pinyin syllables pass through
     if (/[0-9]/.test(c)) { out.push(c); continue; }
     if (!map.has(c) && !out.includes(c)) out.push(c);
   }
+  flush();
   return out;
 }
 
@@ -74,7 +83,7 @@ function* syllablesFrom(pinyin) {
     const tail = rest.slice(onset.length);
     let final = '';
     for (const f of FINALS) if (tail.startsWith(f)) { final = f; break; }
-    if (!final) return;                  // unknown trailing letters — ignore quietly
+    if (!final) return; // The skipped-character API reports this unparsed suffix.
     yield { onset, final };
     i += (onset + final).length;
   }
@@ -102,7 +111,7 @@ export function pinyinToMoras(text, mora = 0.14) {
     for (const word of latin.trim().split(/\s+/)) pushSyllables(out, word, mora);
     latin = '';
   };
-  for (const c of text) {
+  for (const c of text.normalize('NFC')) {
     if (PAUSE.has(c)) {
       flush();
       out.push({ vowel: 'n', dur: mora * 1.6, onset: null, nasal: false, glide: null });

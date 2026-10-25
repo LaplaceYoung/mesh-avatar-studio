@@ -46,6 +46,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const pendingRef = useRef<typeof pendingCreation>(undefined);
   const productionTurn = useRef(!!savedTurn && !!savedSession && savedTurn.sessionId === savedSession.id);
   const productionProject = useRef(savedTurn?.projectName ?? '');
+  const productionToolObserved = useRef(false);
   const [config, setConfig] = useState<SessionConfigOption[]>([]);
   const [entries, setEntries] = useState<Entry[]>([]), [permissions, setPermissions] = useState<Permission[]>([]);
   const [error, setError] = useState(''), [draft, setDraft] = useState(''), [context, setContext] = useState(true), [attempt, setAttempt] = useState(0);
@@ -130,7 +131,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const pending = pendingRef.current;
     if (!pending || status !== 'ready' || socket.current?.readyState !== WebSocket.OPEN) return;
     // Consume before sending. Reconnection must not silently duplicate a creation request.
-    pendingRef.current = undefined; setPendingCreation(undefined); productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName, source: pending.source })); savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: pending.projectName, expiresAt: Date.now() + LOCK_TTL })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
+    pendingRef.current = undefined; setPendingCreation(undefined); productionToolObserved.current = false; productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName, source: pending.source })); savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: pending.projectName, expiresAt: Date.now() + LOCK_TTL })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
     socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));
     pinned.current = true;
   }, [status, pendingCreation]);
@@ -178,9 +179,10 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
           const projectName = clearProductionTurn();
           // Cancellation and limits are terminal for automation, even though
           // ACP returns them through the same response as a normal end_turn.
-          const completed = event.stopReason === 'end_turn';
+          const completed = event.stopReason === 'end_turn' && productionToolObserved.current;
           emitActivity(completed ? 'completed' : 'failed', completed
             ? zh ? 'Agent 回合结束，正在检查制作产物；不代表角色已完成。' : 'Agent turn ended; inspecting artifacts, not declaring the avatar complete.'
+            : event.stopReason === 'end_turn' ? zh ? '本回合未观察到制作工具调用，不能确认执行成功；请检查产物和 Agent 配置后手动继续。' : 'No production tool activity was observed. Inspect artifacts and Agent configuration before resuming manually.'
             : zh ? `Agent 已停止（${event.stopReason ?? '未知原因'}），不会自动续跑；请检查产物后手动继续。` : `Agent stopped (${event.stopReason ?? 'unknown reason'}); automatic continuation is disabled for this turn. Inspect artifacts before resuming.`, projectName);
           window.dispatchEvent(new Event('studio:production-refresh'));
         }
@@ -197,6 +199,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
         setEntries(items => items.some(item => item.id === id) ? items.map(item => item.id === id ? { ...item, text: item.text + chunk } : item) : [...items, { id, kind: 'assistant', text: chunk }]);
       }
       if (update.sessionUpdate === 'tool_call' || update.sessionUpdate === 'tool_call_update') {
+        if (!replaying && productionTurn.current) productionToolObserved.current = true;
         streamId.current = null;
         const id = update.toolCallId ?? `tool-${++sequence.current}`;
         const blocks = Array.isArray(update.content) ? update.content : [];

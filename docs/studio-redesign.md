@@ -486,8 +486,8 @@ accuracy, permission-approval interaction or the full production workflow.
 
 ## Pi ACP execution follow-up
 
-The first Pi tool diagnostic used a no-tools prompt, so its zero tool calls were
-not meaningful. A second prompt explicitly required one exact shell printf and
+Correction: the original Pi tool diagnostic DID request printf. A later
+no-tools probe also failed to return its marker. Another tool prompt required one exact shell printf and
 marker-only output; Pi still completed with `end_turn`, zero tool calls, zero
 permissions and no marker. A third no-tools diagnostic observed two
 `session_info_update`, two `usage_update`, one `available_commands_update` and
@@ -507,3 +507,10 @@ production-status returned a different fingerprint, then the original fingerprin
 after the original bytes were restored. No visual approval was written. Reading
 all review bytes each inspection adds I/O; this is not a filesystem snapshot and
 does not guarantee atomicity against concurrent agent writes.
+
+Installed pi-acp code inspection found that startTurn catches some RPC errors
+and resolves "error", while the prompt method converts non-cancelled "error"
+to end_turn. This explains why end_turn is insufficient evidence, but does not
+identify the original underlying RPC failure. Production turns with no observed
+tool activity now report unverified execution and do not auto-continue. Ordinary
+chat is unchanged; a tool event alone still does not prove artifact correctness.

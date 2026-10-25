@@ -92,7 +92,12 @@ export function agentBridge(root: string): Plugin {
               const task = message.projectName === undefined
                 ? current.agent.prompt(message.text)
                 : productionTurns.run(message.projectName, () => current.agent.prompt(message.text));
-              void task.catch(error => emit(current, { type: 'error', message: String(error) }));
+              void task.catch(error => {
+                emit(current, { type: 'error', message: String(error) });
+                // A rejected project lease never calls prompt(), so its usual
+                // finally/state notification does not run. Reconcile the UI.
+                emit(current, { type: 'state', state: current.agent.getState() });
+              });
             }
             if (message.type === 'configure' && typeof message.configId === 'string' && (typeof message.value === 'string' || typeof message.value === 'boolean')) {
               const current = session;

@@ -47,6 +47,11 @@ export class AcpSession {
       this.emit({ type: 'ready', agent: initialized.agentInfo, session });
     } finally { clearTimeout(timeout); }
   }
+  getState(): 'starting' | 'working' | 'ready' | 'exited' {
+    if (this.disposed) return 'exited';
+    if (!this.sessionId) return 'starting';
+    return this.busy ? 'working' : 'ready';
+  }
   async prompt(text: string) {
     if (!this.sessionId || this.disposed) throw new Error('Agent is not connected.');
     if (this.busy) throw new Error('Wait for this turn or cancel it before sending another task.');

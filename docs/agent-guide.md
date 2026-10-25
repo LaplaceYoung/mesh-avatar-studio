@@ -270,3 +270,12 @@ zero-based frame numbers and elapsed seconds in poses.json. The six subsequent
 hair samples use a separate instance and are not part of that blink timeline.
 Combine with `--hide-eye-creases` for `work/blink-sequence-without-creases/`.
 These are rendered frame images, not an encoded video or a quality verdict.
+
+Continuous blink sequences leave hair/accessory physics enabled even though
+idle and automatic motions are disabled. The physics implementation includes
+time-dependent wind, and eye crops include nearby hair. In a local sequence,
+matching open values on closure/reopening differed by a mean 0.036..0.260 per
+RGBA channel on a 0..255 scale; those numbers are not blink defect scores.
+Use the sequence metadata to distinguish enabled physics from static sampling,
+and inspect differences spatially before attributing them to eye deformation.
+The per-project pair-comparison report is private diagnostic data, not approval.

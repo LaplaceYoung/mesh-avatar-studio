@@ -429,3 +429,16 @@ unchanged. Restored the diagnostic settings through the same save endpoint.
 No original user project was modified. This verifies the local persistence and
 validation path, not browser input/undo behavior or ACP generation quality.
 The pose evidence predates this save and must be rendered again before signoff.
+
+## Live Codex ACP initialization check
+
+The local provider inventory reported Claude, Codex and Pi executable availability.
+A dedicated Codex session was created through POST /__studio/agents and attached
+via the authenticated WebSocket. It returned `attached` and `ready`, advertising
+mode, collaboration_mode, model and reasoning_effort configuration controls.
+The diagnostic sent `stop` immediately on readiness and observed socket closure;
+no prompt, project file or private image was sent. No exit event was observed in
+this run, so do not describe this as exit-event validation. This verifies Codex
+adapter startup and capability discovery only, not tool calls, permissions,
+vision processing, reconnects or a complete avatar production run. Session
+capabilities/tokens were held in process memory and not logged or committed.

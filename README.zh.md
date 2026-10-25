@@ -20,7 +20,7 @@ Mesh Avatar Studio 是一个本地优先的 2D 角色工作台：把一张角色
 需要 Node.js 22.17+ 和 Git。区域证据、图层重建需要 Python 3.10+ 与 `uv`；本地 Agent 还需要分别安装并登录对应 CLI。
 
 ```sh
-git clone https://github.com/shinshin86/mesh-avatar-studio.git
+git clone --branch feat/studio-redesign https://github.com/LaplaceYoung/mesh-avatar-studio.git
 cd mesh-avatar-studio
 npm install
 npm run doctor
@@ -57,7 +57,7 @@ key 只由本地 Vite 服务端转发给 Mosi API。浏览器只会拿到经过�
 
 ## 本地 Agent
 
-浮动 Agent 窗口只会在用户明确点击连接后启动已安装的 provider。ACP 事件会展示消息、计划、工具调用、权限请求和文件 diff，不会静默授予权限。原生 CLI 的配置仍然是最终权限来源。请把它视为本地便利层，而不是安全沙箱，只在可信仓库中使用。
+浮动 Agent 窗口在用户点击连接或明确提交制作任务后启动已安装的 provider。ACP 事件会展示消息、计划、工具调用、权限请求和文件 diff，不会静默授予权限。原生 CLI 的配置仍然是最终权限来源。请把它视为本地便利层，而不是安全沙箱，只在可信仓库中使用。
 
 ## 隐私与 Git 忽略文件
 
@@ -76,3 +76,12 @@ key 只由本地 Vite 服务端转发给 Mosi API。浏览器只会拿到经过�
 代码遵循 [MIT License](LICENSE)。Miko 示例不属于 MIT 代码许可，需遵循[单独的使用条款](samples/miko-qipao/MIKO_ASSET_TERMS.md)。Miko 是 AITuber OnAir 的角色，© Yuki Shindo；本项目不是 AITuber OnAir 官方产品。
 
 面部追踪使用依据 Apache License 2.0 授权的 [MediaPipe](https://github.com/google-ai-edge/mediapipe)，详见 `vendor/mediapipe/LICENSE`。
+
+## 当前验证范围与限制
+
+- Claude 和 Codex 已验证一次真实 ACP 工具调用；Pi 已验证初始化，但本机配置的推理账户在诊断时返回余额不足。安装检测不等于模型可用。
+- 上传／生图支持可选本地白底处理、原图保留和处理前后对比；贴边白发白衣可能误删，需要检查。
+- 姿态审查提供全图、眼部、嘴部总览，逐帧导航和静止帧对比；反馈与验收关联证据版本。文件完整不代表视觉质量通过。
+- 自动续跑有回合上限和停滞保护；服务端同项目互斥只覆盖带项目标签的请求，不是文件系统沙箱。
+- 完整「新图片上传 → Agent 自动描点／绑定 → 最终视觉验收」尚未验证完成，不能承诺所有画风自动成品。输出是网格角色，不是 Live2D Cubism 工程。
+- 诊断命令：`npm run render-poses -- projects/<name> --blink-sequence`；可用 `--blink-sweep` 或 `--hide-eye-creases` 定位问题。诊断输出不能替代正式审查。

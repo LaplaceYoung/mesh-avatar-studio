@@ -20,7 +20,7 @@ This is an independent fork and product direction, not an official AITuber OnAir
 Requirements: Node.js 22.17+ and Git. Python 3.10+ with `uv` is needed for regional evidence and layer rebuilding. Local Agent integrations require the corresponding CLI to be installed and authenticated separately.
 
 ```sh
-git clone https://github.com/shinshin86/mesh-avatar-studio.git
+git clone --branch feat/studio-redesign https://github.com/LaplaceYoung/mesh-avatar-studio.git
 cd mesh-avatar-studio
 npm install
 npm run doctor
@@ -75,3 +75,19 @@ Source illustrations, generated images, regional crops, review frames and `.env.
 The code remains under the [MIT License](LICENSE). The Miko sample is separate from the MIT-licensed code and follows [its own usage terms](samples/miko-qipao/MIKO_ASSET_TERMS.md). Miko is a character of AITuber OnAir, © Yuki Shindo, and this project is not an official AITuber OnAir product.
 
 Face tracking uses [MediaPipe](https://github.com/google-ai-edge/mediapipe) under Apache License 2.0; see `vendor/mediapipe/LICENSE`.
+
+## Verification boundaries
+
+Claude and Codex have each completed a synthetic ACP tool round-trip locally.
+Pi initialized, but its configured inference account returned insufficient balance
+during diagnosis. Startup is not proof of inference or vision readiness.
+
+Intake offers optional local white-background removal and original/source comparison.
+Review offers eye/mouth sheets, frame navigation and rest-pose comparison, with
+revision-bound feedback and approval. White hair/clothing can be damaged by
+background removal; artifact validity is not visual approval.
+
+A new illustration completing automatic tracing, rigging and final visual approval
+has not yet been verified as a whole. Outputs are mesh avatars, not Live2D Cubism
+projects. Diagnostic flags `--blink-sweep`, `--blink-sequence` and
+`--hide-eye-creases` write separate evidence, not approved production results.

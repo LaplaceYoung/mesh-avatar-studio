@@ -9,17 +9,21 @@
 
 ![ミコのサンプルを開いたエディタ](docs/images/ja/01-overview.png)
 
+このリポジトリは独立した fork です。[元のプロジェクト](https://github.com/shinshin86/mesh-avatar-studio)に感謝します。上の紹介ページと Player は上流版のデモであり、この fork の ACP・画像生成機能は含みません。
+
 ## サンプルで試す
 
 Node.js 22.17 以上と Git が必要です。
 
 ```sh
-npx create-mesh-avatar-studio
+git clone --branch feat/studio-redesign https://github.com/LaplaceYoung/mesh-avatar-studio.git
 cd mesh-avatar-studio
+npm install
+npm run doctor
 npm run dev
 ```
 
-最初のコマンドで、リポジトリのダウンロード、パッケージのインストール、必要なツールの確認までを行います。自分でリポジトリを取得した場合は、`npm install` のあとに `npm run doctor` を実行すると同じ確認ができます。エディタと配信画面に必要なのは Node.js だけです。uv と Python はレイヤーの作り直しに、Playwright の Chromium はエージェントがアバターを作るときの動きの確認に使います。足りないものは警告で知らせます。
+上記のコマンドで、この fork の開発ブランチを取得し、依存関係のインストールと環境確認を行います。自分でリポジトリを取得した場合は、`npm install` のあとに `npm run doctor` を実行すると同じ確認ができます。エディタと配信画面に必要なのは Node.js だけです。uv と Python はレイヤーの作り直しに、Playwright の Chromium はエージェントがアバターを作るときの動きの確認に使います。足りないものは警告で知らせます。
 
 ターミナルに表示された URL(例: `http://127.0.0.1:5173/`)をブラウザで開くと、同梱のサンプル(チャイナドレスのミコ)が表示されます。左の一覧からパーツを選び、画像の上の点をドラッグすると、右のプレビューに結果が反映されます。サンプルは読み取り専用なので、編集すると「コピーして編集を続ける」ボタンが出ます。押すと自分用のコピーで作業を続けられます。
 

@@ -47,8 +47,8 @@ export function Preview({ projectKey, rig, assets, lipSync, onLipSyncChange, has
   const [parameters, setParameters] = useState<Record<string, number>>({});
   const [audioActive, setAudioActive] = useState(false);
   const [lip, setLip] = useState<Lip>(null);
-  const [lipLanguage, setLipLanguage] = useState<LipLanguage>('ja');
-  const [text, setText] = useState(sampleText.ja);
+  const [lipLanguage, setLipLanguage] = useState<LipLanguage>(() => language === 'zh' ? 'zh' : 'ja');
+  const [text, setText] = useState(() => sampleText[language === 'zh' ? 'zh' : 'ja']);
   const [speed, setSpeed] = useState(7);
   const [loop, setLoop] = useState(false);
   const [liveMouth, setLiveMouth] = useState(0);

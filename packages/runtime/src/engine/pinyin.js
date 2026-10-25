@@ -37,6 +37,7 @@ const FINAL_SHAPE = {
   u: ['u', null], ua: ['a', 'u'], uo: ['o', 'u'], uai: ['a', 'u'], ui: ['e', 'u'],
   uan: ['a', 'u'], un: ['e', 'u'], uang: ['a', 'u'], ueng: ['e', 'u'],
   v: ['v', null], ve: ['e', 'v'], van: ['e', 'v'], vn: ['v', 'v'],
+  n: ['n', null],
 };
 
 // Normalize accidental tone marks so the documented toneless path also accepts
@@ -56,7 +57,7 @@ export function skippedPinyinCharacters(text) {
   let latin = '';
   const flush = () => {
     let consumed = 0;
-    for (const { onset, final } of syllablesFrom(normalizeLatin(latin))) consumed += onset.length + final.length;
+    for (const { onset, final, writtenLength } of syllablesFrom(normalizeLatin(latin))) consumed += writtenLength ?? onset.length + final.length;
     for (const c of [...latin].slice(consumed)) if (!out.includes(c)) out.push(c);
     latin = '';
   };
@@ -75,6 +76,10 @@ const PAUSE = new Set([...'、。，．！？；：,.!?;:\u3000…\n\t']);
 const GAP = new Set([...' ']);
 
 function* syllablesFrom(pinyin) {
+  // The frequency table encodes 儿/兒 as r and the syllabic nasal 嗯 as n.
+  // Match only a whole token, not consonants inside ordinary syllables.
+  if (pinyin.toLowerCase() === 'r') { yield { onset: '', final: 'er', writtenLength: 1 }; return; }
+  if (pinyin.toLowerCase() === 'n') { yield { onset: '', final: 'n', writtenLength: 1 }; return; }
   let i = 0;
   while (i < pinyin.length) {
     const rest = pinyin.slice(i).toLowerCase();

@@ -154,8 +154,8 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
     result.revision = createHash('sha256').update(await readFile(manifestFile.actual)).digest('hex');
     const reviewedFiles: Record<string, string[]> = {};
     try {
-      const review = JSON.parse(await readFile(join(project, 'regions-review.json'), 'utf8')) as { sourceSha256?: unknown; manifest?: unknown; files?: unknown };
-      if (review.sourceSha256 === expectedHash && review.manifest === manifestRelative && review.files && typeof review.files === 'object') {
+      const review = JSON.parse(await readFile(join(project, 'regions-review.json'), 'utf8')) as { sourceSha256?: unknown; manifest?: unknown; revision?: unknown; files?: unknown };
+      if (review.sourceSha256 === expectedHash && review.manifest === manifestRelative && review.revision === result.revision && review.files && typeof review.files === 'object') {
         for (const name of regionNames) {
           const values = (review.files as Record<string, unknown>)[name];
           if (Array.isArray(values)) reviewedFiles[name] = values.filter((value): value is string => value === 'detail' || value === 'grid');
@@ -317,10 +317,11 @@ export function productionStatusPlugin(root: string): Plugin {
         if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
         try {
           let body = ''; for await (const chunk of req) { body += chunk; if (body.length > 4096) return reply(413, { error: 'Review request is too large.' }); }
-          const input = JSON.parse(body) as { region?: unknown; kind?: unknown; reviewed?: unknown };
+          const input = JSON.parse(body) as { region?: unknown; kind?: unknown; reviewed?: unknown; revision?: unknown };
           if (typeof input.region !== 'string' || !/^[A-Za-z][A-Za-z0-9_-]{0,47}$/.test(input.region) || (input.kind !== 'detail' && input.kind !== 'grid') || typeof input.reviewed !== 'boolean') return reply(400, { error: 'Provide a region, detail/grid kind and reviewed boolean.' });
           const result = await inspectProduction(root, name);
           const stage = result.stages.find(item => item.id === 'regions');
+          if (!stage?.revision || input.revision !== stage.revision) return reply(409, { error: 'Region evidence changed or its version is missing. Reload the images before recording review.' });
           if (!stage?.required?.includes(input.region)) return reply(404, { error: 'Region is not part of the current evidence manifest.' });
           if (!stage.files.some(file => file.endsWith(`/${input.region}-${input.kind}.png`))) return reply(404, { error: 'This evidence type is not listed for the selected region.' });
           const repository = await realpath(root), project = join(repository, 'projects', name), source = await readFile(join(project, 'source.png'));
@@ -330,8 +331,8 @@ export function productionStatusPlugin(root: string): Plugin {
           const reviewPath = join(project, 'regions-review.json');
           const files: Record<string, string[]> = {};
           try {
-            const previous = JSON.parse(await readFile(reviewPath, 'utf8')) as { sourceSha256?: unknown; manifest?: unknown; files?: unknown };
-            if (previous.sourceSha256 === sourceSha256 && previous.manifest === manifest && previous.files && typeof previous.files === 'object') {
+            const previous = JSON.parse(await readFile(reviewPath, 'utf8')) as { sourceSha256?: unknown; manifest?: unknown; revision?: unknown; files?: unknown };
+            if (previous.sourceSha256 === sourceSha256 && previous.manifest === manifest && previous.revision === stage.revision && previous.files && typeof previous.files === 'object') {
               for (const [region, values] of Object.entries(previous.files as Record<string, unknown>)) if (Array.isArray(values)) files[region] = values.filter((value): value is string => value === 'detail' || value === 'grid');
             }
           } catch { /* Start a new review for a new source or manifest. */ }
@@ -339,7 +340,7 @@ export function productionStatusPlugin(root: string): Plugin {
           if (input.reviewed) current.add(input.kind); else current.delete(input.kind);
           files[input.region] = [...current];
           const reviewed = Object.keys(files).filter(region => files[region]?.includes('detail') && files[region]?.includes('grid'));
-          await writeFile(reviewPath, JSON.stringify({ version: 2, sourceSha256, manifest, files, updatedAt: new Date().toISOString() }, null, 2) + '\n', { mode: 0o600 });
+          await writeFile(reviewPath, JSON.stringify({ version: 3, sourceSha256, manifest, revision: stage.revision, files, updatedAt: new Date().toISOString() }, null, 2) + '\n', { mode: 0o600 });
           return reply(200, { reviewed, reviewedFiles: files });
         } catch (error) { return reply(422, { error: error instanceof Error ? error.message : 'Could not save region review.' }); }
       }

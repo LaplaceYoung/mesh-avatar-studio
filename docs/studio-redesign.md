@@ -577,3 +577,12 @@ content consumes Escape and returns focus to its trigger. The floating Agent
 handles only unconsumed, non-composing Escape events originating inside its
 window, so portalled review dialogs do not also minimize it. Browser verification
 still needed for model-select popups, nested image previews and IME cancellation.
+
+Geometry-size/aspect heuristics are now non-blocking region advisories, surfaced
+in the production panel and region drawer. The previous hard gate conflated
+small or flat features with invalid coordinates and could block stylized avatars.
+Out-of-bounds coordinates, malformed evidence, missing core regions, stale source
+bindings and low-confidence findings retain their existing blocking behavior.
+A warning is not visual approval; the Agent must inspect crops rather than resize
+boxes merely to satisfy a guessed facial proportion. This correction does not
+claim measured recognition accuracy across different character styles.

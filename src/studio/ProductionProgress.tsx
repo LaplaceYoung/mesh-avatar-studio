@@ -135,6 +135,7 @@ ${taskText}
     <div className="production-stages">{status?.stages.map(stage => <div key={stage.id}>
       <span>{titles[stage.id]}</span><Tag color={stage.state === 'invalid' ? 'warning' : stage.state === 'observed' ? 'green' : undefined}>{stage.state === 'observed' ? zh ? '已生成' : 'Present' : stage.state === 'invalid' ? zh ? '需检查' : 'Check' : zh ? '未生成' : 'Missing'}</Tag>
       {stage.issues.length > 0 && <small>{stage.issues.join(' · ')}</small>}
+      {stage.warnings?.map(warning => <small key={warning}>{zh ? '检查提示（非阻断）：' : 'Advisory (non-blocking): '}{warning}</small>)}
     </div>)}</div>
     {status?.stages.find(stage => stage.id === 'regions')?.regionSummary && <div className="production-region-summary" aria-label={zh ? '区域质量摘要' : 'Region quality summary'}><strong>{zh ? '区域质量' : 'Region quality'}</strong><div>{status.stages.find(stage => stage.id === 'regions')!.regionSummary!.map(region => {
       const openRegion = () => { setFocusRegion(region.name); setEvidenceOpen(true); };

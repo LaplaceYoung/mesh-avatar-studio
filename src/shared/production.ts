@@ -4,6 +4,7 @@ export type ProductionStage = {
   files: string[];
   revision?: string;
   issues: string[];
+  warnings?: string[];
   reviewed?: string[];
   required?: string[];
   reviewedFiles?: Record<string, string[]>;

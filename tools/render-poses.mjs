@@ -20,14 +20,16 @@ const poses = [
 async function main() {
   const rawArgs = process.argv.slice(2);
   const hideEyeCreases = rawArgs.includes('--hide-eye-creases');
+  const blinkSequence = rawArgs.includes('--blink-sequence');
   const blinkSweep = rawArgs.includes('--blink-sweep');
-  const args = rawArgs.filter(arg => !['--hide-eye-creases', '--blink-sweep'].includes(arg));
-  const renderPoses = blinkSweep ? Array.from({ length: 11 }, (_, index) => [`blink-${String(index).padStart(2, '0')}`, { eyeLOpen: 1 - index / 10, eyeROpen: 1 - index / 10 }]) : poses;
+  const args = rawArgs.filter(arg => !['--hide-eye-creases', '--blink-sweep', '--blink-sequence'].includes(arg));
+  if (blinkSequence && blinkSweep) throw new Error('Choose --blink-sequence or --blink-sweep, not both.');
+  const renderPoses = blinkSequence ? Array.from({ length: 21 }, (_, index) => [`blink-${String(index).padStart(2, '0')}`, { eyeLOpen: Math.abs(index - 10) / 10, eyeROpen: Math.abs(index - 10) / 10 }]) : blinkSweep ? Array.from({ length: 11 }, (_, index) => [`blink-${String(index).padStart(2, '0')}`, { eyeLOpen: 1 - index / 10, eyeROpen: 1 - index / 10 }]) : poses;
   if (args.includes('--help')) {
-    console.log('Usage: npm run render-poses -- <project> [--hide-eye-creases] [--blink-sweep]');
+    console.log('Usage: npm run render-poses -- <project> [--hide-eye-creases] [--blink-sweep | --blink-sequence]');
     return;
   }
-  if (args.length !== 1) throw new Error('Usage: npm run render-poses -- <project> [--hide-eye-creases] [--blink-sweep]');
+  if (args.length !== 1) throw new Error('Usage: npm run render-poses -- <project> [--hide-eye-creases] [--blink-sweep | --blink-sequence]');
   const project = await realpath(resolve(args[0]));
   if (relative(root, project).startsWith('..')) throw new Error('project must stay inside the repository');
   const rig = JSON.parse(await readFile(resolve(project, 'rig.json'), 'utf8'));
@@ -75,7 +77,7 @@ async function main() {
     // Only the local code server may be contacted; private images use data URLs.
     await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     await page.goto(`${origin}/__pose_review__`);
-    const result = await page.evaluate(async ({ rig, assets, poses, hideEyeCreases }) => {
+    const result = await page.evaluate(async ({ rig, assets, poses, hideEyeCreases, blinkSequence }) => {
       const { createMeshAvatar, PARAMS } = await import('/packages/runtime/src/index.ts');
       const canvas = document.getElementById('avatar');
       const width = Math.ceil(rig.image.width * 1.2), height = Math.ceil(rig.image.height * 1.1);
@@ -96,13 +98,15 @@ async function main() {
         av.setAutoIdle(false); av.setAutoMotion(false); av.setParameters(defaults);
         return av;
       }
+      const continuous = blinkSequence ? await avatar() : null;
       for (const [name, values, expression] of poses) {
-        const av = await avatar();
+        const av = continuous ?? await avatar();
         av.setParameters({ ...defaults, ...values });
         if (expression) av.setExpression(expression);
-        av.advance(1, 60);
-        pictures.push([name, canvas.toDataURL()]); av.destroy();
+        av.advance(blinkSequence ? 1 / 60 : 1, 60);
+        pictures.push([name, canvas.toDataURL()]); if (!continuous) av.destroy();
       }
+      continuous?.destroy();
       const av = await avatar();
       av.setParameters({ ...defaults, angleX: 30 }); av.advance(0.2, 60);
       av.setParameters(defaults);
@@ -146,13 +150,13 @@ async function main() {
         ctx.fillStyle = '#171b23'; ctx.font = '16px sans-serif'; ctx.fillText(name, x + 8, y + 22);
       }
       return { images: [...pictures, ...crops, ['contact-sheet', sheet.toDataURL()]], width, height, cropBounds: { eyes, mouth }, padTop: 0.1, padSide: 0.1 };
-    }, { rig, assets, poses: renderPoses, hideEyeCreases });
+    }, { rig, assets, poses: renderPoses, hideEyeCreases, blinkSequence });
     if (browserErrors.length) throw new Error(browserErrors.join('\n'));
-    const review = resolve(project, blinkSweep ? `work/blink-sweep${hideEyeCreases ? '-without-creases' : ''}` : hideEyeCreases ? 'work/review-without-eye-creases' : 'review'); await mkdir(review, { recursive: true });
+    const review = resolve(project, blinkSequence ? `work/blink-sequence${hideEyeCreases ? '-without-creases' : ''}` : blinkSweep ? `work/blink-sweep${hideEyeCreases ? '-without-creases' : ''}` : hideEyeCreases ? 'work/review-without-eye-creases' : 'review'); await mkdir(review, { recursive: true });
     if (relative(project, await realpath(review)).startsWith('..')) throw new Error('review folder must stay inside the project');
     for (const [name, url] of result.images) await writeFile(resolve(review, `${name}.png`), Buffer.from(url.split(',')[1], 'base64'));
     const { images, ...metadata } = result;
-    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, ...(blinkSweep || hideEyeCreases ? { diagnosticOnly: true, diagnostic: blinkSweep ? 'blink-sweep' : 'hidden-creases', hiddenLayers: hideEyeCreases ? ['eye0_crease', 'eye1_crease'] : [] } : {}), project: basename(project), fixedFps: 60, poseSeconds: 1, poses: renderPoses.map(([name, parameters, expression]) => ({ name, parameters, ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
+    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, ...(blinkSequence || blinkSweep || hideEyeCreases ? { diagnosticOnly: true, diagnostic: blinkSequence ? 'blink-sequence' : blinkSweep ? 'blink-sweep' : 'hidden-creases', hiddenLayers: hideEyeCreases ? ['eye0_crease', 'eye1_crease'] : [] } : {}), project: basename(project), fixedFps: 60, poseSeconds: blinkSequence ? 1 / 60 : 1, poses: renderPoses.map(([name, parameters, expression], index) => ({ name, parameters, ...(blinkSequence ? { frame: index, timeSeconds: (index + 1) / 60 } : {}), ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
     console.log(`Rendered ${renderPoses.length + 6} poses, eye/mouth crops and contact-sheet.png in ${relative(root, review)}/`);
   } finally {
     await browser?.close();

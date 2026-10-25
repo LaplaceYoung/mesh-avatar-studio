@@ -262,3 +262,11 @@ adjacent eye crops to locate where residual lines emerge. Combine with
 Both outputs are diagnostic-only and cannot establish visual signoff. This is
 parameter-space sampling, not continuous video: it cannot prove absence of
 frame-time flicker, asymmetric-blink artifacts or physics discontinuities.
+
+For continuous runtime-state diagnosis, use `--blink-sequence` instead of
+`--blink-sweep`. It uses one avatar instance for 21 frames (open -> closed ->
+open), advancing 1/60 second per frame. Output is `work/blink-sequence/`, with
+zero-based frame numbers and elapsed seconds in poses.json. The six subsequent
+hair samples use a separate instance and are not part of that blink timeline.
+Combine with `--hide-eye-creases` for `work/blink-sequence-without-creases/`.
+These are rendered frame images, not an encoded video or a quality verdict.

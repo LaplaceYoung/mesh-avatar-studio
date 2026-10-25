@@ -57,10 +57,10 @@ export function ProductionProgress({ productionBusy = false }: { productionBusy?
         const data = await response.json(); if (!response.ok) throw new Error(data.error);
         if (!disposed && version === inspectionVersion.current) { setStatus(data); setError(''); }
       } catch (reason) { if (!disposed && version === inspectionVersion.current) setError(String(reason)); }
-      finally { if (!disposed) timer = setTimeout(inspect, 5000); }
+      finally { if (!disposed) timer = setTimeout(inspect, productionBusy ? 1200 : 5000); }
     };
     void inspect(); return () => { disposed = true; controller.abort(); clearTimeout(timer); };
-  }, [task, refreshTick]);
+  }, [task, refreshTick, productionBusy]);
   useEffect(() => {
     const refresh = () => { setRefreshTick(value => value + 1); };
     window.addEventListener('studio:production-refresh', refresh);

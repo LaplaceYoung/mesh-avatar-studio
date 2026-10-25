@@ -539,3 +539,11 @@ verification changed the diagnostic manifest fingerprint to zeros and observed
 the review-stage issue, then restored the real manifest bytes. Diagnostic and
 private projects remain ignored; this prevents stale-rig signoff but does not
 replace spatial visual inspection.
+
+After adding the mandatory eye/mouth detail sheets, a private diagnostic project
+was re-rendered into its official review directory (not a diagnostic directory).
+Production status reported review=observed with no issues and listed
+review/eyes-sheet.png, review/mouth-sheet.png and review/contact-sheet.png. The
+returned content revision was a 64-character SHA-256 fingerprint. This confirms
+render output and gate consistency only; no visual approval was written and the
+private diagnostic project was not committed.

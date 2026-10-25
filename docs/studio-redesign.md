@@ -418,3 +418,14 @@ new-image recognition or automatic tracing. No optional drawn sprites were
 present in the diagnostic run. Fine hair/ribbon edges, temporal quality and
 other backgrounds remain unverified. Private images and derived assets stay
 ignored under projects/ and are not included in the repository commit.
+
+## Per-eye crease opacity persistence verification
+
+Used the same local project rig POST/GET endpoints as the editor on the isolated
+background diagnostic project. Saved eye0 creaseClosedOpacity=0 and eye1=0.55;
+GET returned both exact values. Separate invalid writes with -0.1, 1.1, string
+"0" and null returned HTTP 400, and a subsequent GET confirmed the valid rig was
+unchanged. Restored the diagnostic settings through the same save endpoint.
+No original user project was modified. This verifies the local persistence and
+validation path, not browser input/undo behavior or ACP generation quality.
+The pose evidence predates this save and must be rendered again before signoff.

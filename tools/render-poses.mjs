@@ -149,7 +149,24 @@ async function main() {
         ctx.fillStyle = '#dedfe5'; ctx.fillRect(x, y, 300, 30);
         ctx.fillStyle = '#171b23'; ctx.font = '16px sans-serif'; ctx.fillText(name, x + 8, y + 22);
       }
-      return { images: [...pictures, ...crops, ['contact-sheet', sheet.toDataURL()]], width, height, cropBounds: { eyes, mouth }, padTop: 0.1, padSide: 0.1 };
+      const detailSheets = [];
+      for (const part of ['eyes', 'mouth']) {
+        const entries = crops.filter(([name]) => name.endsWith(`-${part}`));
+        const detail = document.createElement('canvas'); detail.width = 1200;
+        const cellHeight = part === 'eyes' ? 260 : 440;
+        detail.height = Math.ceil(entries.length / 2) * cellHeight;
+        const context = detail.getContext('2d');
+        context.fillStyle = '#919191'; context.fillRect(0, 0, detail.width, detail.height);
+        for (const [i, [name, url]] of entries.entries()) {
+          const image = new Image(); image.src = url; await image.decode();
+          const x = i % 2 * 600, y = Math.floor(i / 2) * cellHeight;
+          const scale = Math.min(584 / image.width, (cellHeight - 40) / image.height);
+          context.drawImage(image, x + (600 - image.width * scale) / 2, y + 32, image.width * scale, image.height * scale);
+          context.fillStyle = '#171b23'; context.font = '18px sans-serif'; context.fillText(name, x + 8, y + 23);
+        }
+        detailSheets.push([`${part}-sheet`, detail.toDataURL()]);
+      }
+      return { images: [...pictures, ...crops, ...detailSheets, ['contact-sheet', sheet.toDataURL()]], width, height, cropBounds: { eyes, mouth }, padTop: 0.1, padSide: 0.1 };
     }, { rig, assets, poses: renderPoses, hideEyeCreases, blinkSequence });
     if (browserErrors.length) throw new Error(browserErrors.join('\n'));
     const review = resolve(project, blinkSequence ? `work/blink-sequence${hideEyeCreases ? '-without-creases' : ''}` : blinkSweep ? `work/blink-sweep${hideEyeCreases ? '-without-creases' : ''}` : hideEyeCreases ? 'work/review-without-eye-creases' : 'review'); await mkdir(review, { recursive: true });

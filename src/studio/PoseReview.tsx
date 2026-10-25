@@ -38,6 +38,8 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
   const imageUrl = (value: string) => `/__studio/review-image?project=${encodeURIComponent(project)}&file=${encodeURIComponent(value.slice('review/'.length))}&revision=${stage?.revision ?? 'unknown'}-${revision}`;
   const baseline = compare && navigation.baseline !== file ? navigation.baseline : undefined;
   const quickFiles = [
+    { key: 'eyes-sheet', label: zh ? '眼部总览' : 'Eyes overview', file: files.find(value => value === 'review/eyes-sheet.png') },
+    { key: 'mouth-sheet', label: zh ? '嘴部总览' : 'Mouth overview', file: files.find(value => value === 'review/mouth-sheet.png') },
     { key: 'contact', label: zh ? '总览' : 'Contact sheet', file: contactSheet },
     { key: 'full', label: zh ? '当前动作全图' : 'Full pose', file: navigation.full },
     { key: 'eyes', label: zh ? '当前动作眼部' : 'Pose eyes', file: navigation.eyes },
@@ -72,7 +74,7 @@ export function PoseReview({ project, stage, open, onClose }: { project: string;
         {quickFiles.length > 0 && <div className="review-quick-filters" role="toolbar" aria-label={zh ? '关键审查证据' : 'Key review evidence'}>{quickFiles.map(item => <Button key={item.key} size="small" type={file === item.file ? 'primary' : 'default'} aria-pressed={file === item.file} onClick={() => setSelected(item.file!)}>{item.label}</Button>)}</div>}
         {availableMotion.length > 0 && <div className="review-quick-filters" role="toolbar" aria-label={zh ? '动作审查快捷入口' : 'Motion review shortcuts'}>{availableMotion.map(item => <Button key={item.key} size="small" type={file === item.file ? 'primary' : 'default'} aria-pressed={file === item.file} onClick={() => setSelected(item.file!)}>{item.label}</Button>)}</div>}
         <Select aria-label={zh ? '审查图片' : 'Review image'} value={file} onChange={setSelected} options={files.map(value => ({ value, label: value.slice('review/'.length) }))} />
-        {file !== contactSheet && <Space wrap>
+        {!file.endsWith('-sheet.png') && <Space wrap>
           <Button disabled={!navigation.previous} onClick={() => setSelected(navigation.previous!)}>{zh ? '上一帧' : 'Previous frame'}</Button>
           <span role="status">{navigation.index + 1}/{navigation.count} · {navigation.frame?.slice('review/'.length)}</span>
           <Button disabled={!navigation.next} onClick={() => setSelected(navigation.next!)}>{zh ? '下一帧' : 'Next frame'}</Button>

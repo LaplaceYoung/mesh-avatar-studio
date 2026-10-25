@@ -198,6 +198,9 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   });
   await stage('review', async result => {
     const metadata = await json('review/poses.json', result);
+    const currentRig = await checkedFile('rig.json', 2 * 1024 * 1024);
+    const currentRigSha256 = createHash('sha256').update(await readFile(currentRig.actual)).digest('hex');
+    if (metadata.rigSha256 !== currentRigSha256) result.issues.push('Review rig fingerprint is missing or differs from the current rig. Re-render poses before visual signoff.');
     if (metadata.diagnosticOnly || metadata.hiddenLayers?.length) result.issues.push('Diagnostic renders hide layers and cannot serve as official visual review evidence. Re-render without diagnostic flags.');
     if (!Array.isArray(metadata.files) || !metadata.files.length || metadata.files.length > 256 || metadata.files.some((name: unknown) => typeof name !== 'string' || !/^[A-Za-z0-9_-]+\.png$/.test(name))) throw new Error('Invalid review image list.');
     const reviewFiles = new Set(metadata.files as string[]);

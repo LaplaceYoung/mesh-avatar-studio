@@ -1,5 +1,6 @@
 import { readFile, writeFile, mkdir, realpath } from 'node:fs/promises';
 import { resolve, relative, dirname, basename } from 'node:path';
+import { createHash } from 'node:crypto';
 import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite';
 import { chromium } from '@playwright/test';
@@ -32,7 +33,9 @@ async function main() {
   if (args.length !== 1) throw new Error('Usage: npm run render-poses -- <project> [--hide-eye-creases] [--blink-sweep | --blink-sequence]');
   const project = await realpath(resolve(args[0]));
   if (relative(root, project).startsWith('..')) throw new Error('project must stay inside the repository');
-  const rig = JSON.parse(await readFile(resolve(project, 'rig.json'), 'utf8'));
+  const rigBytes = await readFile(resolve(project, 'rig.json'));
+  const rigSha256 = createHash('sha256').update(rigBytes).digest('hex');
+  const rig = JSON.parse(rigBytes.toString('utf8'));
   const errors = validateRig(rig);
   if (errors.length) throw new Error(errors.join('\n'));
   const built = await realpath(resolve(project, 'built'));
@@ -173,7 +176,7 @@ async function main() {
     if (relative(project, await realpath(review)).startsWith('..')) throw new Error('review folder must stay inside the project');
     for (const [name, url] of result.images) await writeFile(resolve(review, `${name}.png`), Buffer.from(url.split(',')[1], 'base64'));
     const { images, ...metadata } = result;
-    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, ...(blinkSequence || blinkSweep || hideEyeCreases ? { diagnosticOnly: true, diagnostic: blinkSequence ? 'blink-sequence' : blinkSweep ? 'blink-sweep' : 'hidden-creases', hiddenLayers: hideEyeCreases ? ['eye0_crease', 'eye1_crease'] : [] } : {}), project: basename(project), fixedFps: 60, ...(blinkSequence ? { sequence: { frameCount: renderPoses.length, durationSeconds: renderPoses.length / 60, autoIdle: false, autoMotion: false, physics: 'enabled', note: 'Hair and accessory wind remains time-dependent. Equal eye-open values need not yield identical crop pixels; crop differences are not a blink-quality verdict.' } } : {}), poseSeconds: blinkSequence ? 1 / 60 : 1, poses: renderPoses.map(([name, parameters, expression], index) => ({ name, parameters, ...(blinkSequence ? { frame: index, timeSeconds: (index + 1) / 60 } : {}), ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
+    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, rigSha256, ...(blinkSequence || blinkSweep || hideEyeCreases ? { diagnosticOnly: true, diagnostic: blinkSequence ? 'blink-sequence' : blinkSweep ? 'blink-sweep' : 'hidden-creases', hiddenLayers: hideEyeCreases ? ['eye0_crease', 'eye1_crease'] : [] } : {}), project: basename(project), fixedFps: 60, ...(blinkSequence ? { sequence: { frameCount: renderPoses.length, durationSeconds: renderPoses.length / 60, autoIdle: false, autoMotion: false, physics: 'enabled', note: 'Hair and accessory wind remains time-dependent. Equal eye-open values need not yield identical crop pixels; crop differences are not a blink-quality verdict.' } } : {}), poseSeconds: blinkSequence ? 1 / 60 : 1, poses: renderPoses.map(([name, parameters, expression], index) => ({ name, parameters, ...(blinkSequence ? { frame: index, timeSeconds: (index + 1) / 60 } : {}), ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
     console.log(`Rendered ${renderPoses.length + 6} poses, eye/mouth crops and contact-sheet.png in ${relative(root, review)}/`);
   } finally {
     await browser?.close();

@@ -531,3 +531,11 @@ settlement maps non-cancelled termination to end_turn. Together these explain
 the observed startup text followed by apparent normal completion. Until the
 account/provider issue is resolved, use an independently verified provider for
 production; do not automatically retry this failure or silently switch models.
+
+Official pose review metadata now records the SHA-256 of the exact rig.json used
+by render-poses. Production inspection hashes current rig.json and marks review
+invalid when the fingerprints differ, independent of timestamps. A local
+verification changed the diagnostic manifest fingerprint to zeros and observed
+the review-stage issue, then restored the real manifest bytes. Diagnostic and
+private projects remain ignored; this prevents stale-rig signoff but does not
+replace spatial visual inspection.

@@ -217,3 +217,21 @@ Tell the person:
 - Eye openings that include lashes or skin; closed eyes that show iris.
 - Committing, uploading or copying the person's image or anything built from it.
 - Editing `samples/` or `reference/` to make a new image work.
+
+### Diagnose residual lines above closed eyes
+
+Before changing blink parameters, inspect `review/eyes-closed-eyes.png` alongside
+`built/base.png` and the extracted `eye*_crease` / `eye*_lash` layers. A mark
+already visible in the base is not introduced by the animation. Check whether
+the source-coordinate ROI contains the entire original eyelid/crease before
+adjusting extraction thresholds. Keep the opening polygon unchanged while
+isolating ROI changes, save the previous rig, and rebuild/re-render for comparison.
+
+A local diagnostic on one illustration found that moving the upper ROI vertices
+8 source pixels upward reduced a darker arc above the image-right closed eye,
+but faint dashed marks remained above both eyes. This is an example of a partial
+fix, not a reusable 8 px recipe or visual signoff. Do not globally expand ROIs or
+lower skin/ink thresholds from this one observation: eyebrows and nearby hair
+must remain intact. Inspect the rest pose and both closed-eye crops after each
+change. ROI changes also alter crop bounds, so align comparisons in source
+coordinates rather than interpreting shifted crop positions as deformation.

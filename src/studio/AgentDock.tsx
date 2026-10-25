@@ -56,7 +56,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnects = useRef(0);
-  useEffect(() => { window.dispatchEvent(new CustomEvent('studio:agent-status', { detail: status })); }, [status]);
+  useEffect(() => { window.dispatchEvent(new CustomEvent('studio:agent-status', { detail: { status, provider: session?.provider ?? provider } })); }, [provider, session?.provider, status]);
   const emitActivity = (state: ProductionActivity['state'], message?: string, projectName = productionProject.current) => {
     if (!projectName) return;
     window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName, state, message, at: new Date().toISOString() } }));

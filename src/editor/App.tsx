@@ -39,6 +39,7 @@ function Workspace() {
   const [projectLibrary, setProjectLibrary] = useState(false);
   const [agentOpen, setAgentOpen] = useState(false);
   const [agentStatus, setAgentStatus] = useState('idle');
+  const [agentProvider, setAgentProvider] = useState('claude');
   const [inspectorTab, setInspectorTab] = useState('preview');
   const { modal } = AntApp.useApp();
   const zh = language === 'zh';
@@ -54,7 +55,7 @@ function Workspace() {
     return () => { window.removeEventListener('studio:agent-prompt', show); window.removeEventListener('studio:agent-start', show); };
   }, []);
   useEffect(() => {
-    const receive = (event: Event) => { const status = (event as CustomEvent<string>).detail; if (typeof status === 'string') setAgentStatus(status); };
+    const receive = (event: Event) => { const detail = (event as CustomEvent<{ status?: unknown; provider?: unknown }>).detail; if (typeof detail === 'string') setAgentStatus(detail); else { if (typeof detail?.status === 'string') setAgentStatus(detail.status); if (typeof detail?.provider === 'string') setAgentProvider(detail.provider); } };
     window.addEventListener('studio:agent-status', receive);
     return () => window.removeEventListener('studio:agent-status', receive);
   }, []);
@@ -514,7 +515,7 @@ function Workspace() {
         </Splitter.Panel>
       </Splitter> : <div className="empty-project"><h2>{checking ? t.checking : t.emptyTitle}</h2><p>{t.projectHelp}</p><Button type="primary" onClick={showProjects}>{t.openProject}</Button>{errorNotice}</div>}
     </div>
-    <AgentWindow open={agentOpen} onOpenChange={setAgentOpen} status={agentStatus}>
+    <AgentWindow open={agentOpen} onOpenChange={setAgentOpen} status={agentStatus} provider={agentProvider}>
       <AgentDock project={projectPath} selection={selected} onRefresh={refreshAfterAgent} />
     </AgentWindow>
     <footer className="studio-status"><Space><span className="status-dot" />{zh ? '本地工作区' : 'Local workspace'}<span data-testid="project-location">{projectPath}</span>{localProject && <><CopyButton value={localProject.absolutePath} label={t.copyPath} icon /><Button size="small" type="text" onClick={() => { void reveal(); }}>{t.showFolder}</Button></>}</Space><span>{selectedPart?.[0] ?? t.selectPart} · WebGL</span></footer>

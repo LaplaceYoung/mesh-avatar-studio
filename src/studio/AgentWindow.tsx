@@ -16,7 +16,7 @@ function readSettings(): WindowSettings {
   } catch { return {}; }
 }
 
-export function AgentWindow({ open, onOpenChange, status, children }: { open: boolean; onOpenChange(open: boolean): void; status?: string; children: ReactNode }) {
+export function AgentWindow({ open, onOpenChange, status, provider, children }: { open: boolean; onOpenChange(open: boolean): void; status?: string; provider?: string; children: ReactNode }) {
   const { language } = useI18n();
   const zh = language === 'zh';
   const titleId = useId();
@@ -82,10 +82,11 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
     configuring: ['更新配置', 'Configuring'], exited: ['已结束', 'Ended'],
   };
   const statusLabel = status ? statusLabels[status]?.[zh ? 0 : 1] ?? status : '';
+  const providerLabel = provider === 'codex' ? 'Codex' : provider === 'pi' ? 'Pi' : 'Claude';
   const active = status === 'starting' || status === 'working' || status === 'configuring';
   return <>
     {!open && <Button ref={launcherRef} className={`agent-launcher${active ? ' agent-launcher-active' : ''}`} type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-expanded={open} aria-controls={windowId} aria-label={zh ? `展开 Agent 对话${statusLabel ? `，${statusLabel}` : ''}` : `Open agent conversation${statusLabel ? `, ${statusLabel}` : ''}`}>
-      Agent{statusLabel && <span className="agent-launcher-status">{statusLabel}</span>}
+      Agent · {providerLabel}{statusLabel && <span className="agent-launcher-status">{statusLabel}</span>}
     </Button>}
     <section id={windowId} ref={windowRef} className={`agent-window${expanded ? ' agent-window-expanded' : ''}`} hidden={!open}
       role="dialog" aria-modal="false" aria-labelledby={titleId} aria-label={zh ? 'Agent 对话窗口' : 'Agent conversation window'}
@@ -104,7 +105,7 @@ export function AgentWindow({ open, onOpenChange, status, children }: { open: bo
             y: Math.max(8, Math.min(innerHeight - rect.height - 8, drag.current.top + event.clientY - drag.current.y)) });
         }}
         onPointerUp={() => { drag.current = null; }} onPointerCancel={() => { drag.current = null; }}>
-        <Space><CodeOutlined /><strong id={titleId}>{zh ? '创作助手' : 'Creative assistant'}</strong>{statusLabel && <span className={`agent-window-status agent-window-status-${status}`} role="status">{statusLabel}</span>}</Space>
+        <Space><CodeOutlined /><strong id={titleId}>{zh ? '创作助手' : 'Creative assistant'}</strong><span className="agent-window-provider">{providerLabel}</span>{statusLabel && <span className={`agent-window-status agent-window-status-${status}`} role="status">{statusLabel}</span>}</Space>
         <Space size={2}>
           <Button type="text" size="small" icon={expanded ? <CompressOutlined /> : <ExpandOutlined />} aria-label={zh ? '切换窗口大小' : 'Toggle window size'} onClick={() => setExpanded(value => !value)} />
           <Button type="text" size="small" icon={<MinusOutlined />} aria-label={zh ? '收起 Agent 对话' : 'Minimize agent conversation'} onClick={() => onOpenChange(false)} />

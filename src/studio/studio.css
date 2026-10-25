@@ -144,6 +144,7 @@ small,.muted { color:var(--studio-muted); }
 @media(max-width:600px) { .agent-conversation { padding:12px; }.agent-message-user { margin-left:12px; }.production-steps { min-width:0; overflow:visible; }.production-steps .ant-steps-item { min-width:0; }.production-steps .ant-steps-item-title { white-space:normal; overflow-wrap:anywhere; }.production-stages { grid-template-columns:1fr; gap:6px; } }
 .illustration-alpha-preview { flex-shrink:0; background:repeating-conic-gradient(#b8b8b8 0% 25%,#e6e6e6 0% 50%) 0 0/16px 16px; }
 .illustration-summary .illustration-alpha-preview img { max-height:240px; }
+.source-fingerprint { display:block; max-width:260px; overflow:hidden; text-overflow:ellipsis; font-family:"SFMono-Regular",Menlo,monospace; font-size:10px; }
 @media(max-width:600px) { .illustration-summary { flex-wrap:wrap; } }
 .review-comparison { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; align-items:start; }
 .review-comparison figure,.review-current-frame { margin:0; min-width:0; }

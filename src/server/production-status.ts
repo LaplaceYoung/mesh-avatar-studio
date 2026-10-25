@@ -79,7 +79,9 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   }
   async function json(file: string, result: ProductionStage) {
     const { actual } = await checkedFile(file, 2 * 1024 * 1024);
-    const value = JSON.parse(await readFile(actual, 'utf8'));
+    const bytes = await readFile(actual);
+    const value = JSON.parse(bytes.toString('utf8'));
+    if (result.id === 'draft' || result.id === 'rig' || result.id === 'layers') result.revision = createHash('sha256').update(bytes).digest('hex');
     result.files.push(file); return value;
   }
   async function sourceHash() {
@@ -99,7 +101,7 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   let rigModified = 0, layersModified = 0, reviewModified = 0, signoffAt: string | undefined;
   let reviewSha256: string | undefined;
   let sourceSha256: string | undefined;
-  await stage('source', async result => { source = await png('source.png', result); sourceSha256 = await sourceHash(); });
+  await stage('source', async result => { source = await png('source.png', result); sourceSha256 = await sourceHash(); result.revision = sourceSha256; });
   await stage('regions', async result => {
     const regions: unknown = await json('regions.json', result);
     if (!Array.isArray(regions) || !regions.length || regions.length > 32) throw new Error('Expected 1–32 observed regions.');

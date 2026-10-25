@@ -15,3 +15,9 @@ export type ProductionNextAction = { stage: ProductionStage['id']; reason: strin
 export type ProductionStatus = { sourceSha256?: string; reviewSha256?: string; project: string; projectExists: boolean; checkedAt: string; stages: ProductionStage[]; previewAvailable: boolean; visualReview: 'unverified' | 'approved'; visualReviewAt?: string; nextAction?: ProductionNextAction };
 export type CreationTask = { projectName: string; source: string; autoContinue?: boolean };
 export type ProductionActivity = { projectName: string; state: 'starting' | 'working' | 'completed' | 'failed'; message?: string; at: string };
+
+// Ignore polling time and human acknowledgements; track artifact changes even
+// when a stage is still invalid with the same validation message.
+export function productionProgressSignature(status: ProductionStatus): string {
+  return JSON.stringify(status.stages.map(stage => ({ id: stage.id, state: stage.state, revision: stage.revision, files: [...stage.files].sort(), issues: stage.issues })));
+}

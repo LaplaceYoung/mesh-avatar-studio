@@ -4,6 +4,7 @@ import { readPreference, savePreference } from '../editor/preferences';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Collapse, Space, Steps, Tag } from 'antd';
 import type { CreationTask, ProductionActivity, ProductionStatus } from '../shared/production';
+import { productionProgressSignature } from '../shared/production';
 import { useI18n } from '../editor/i18n';
 
 const MAX_AUTO_CONTINUE_TURNS = 6;
@@ -115,10 +116,10 @@ ${taskText}
       setContinuationNotice(zh ? `自动续跑已达到 ${MAX_AUTO_CONTINUE_TURNS} 个 ACP 回合上限，请检查当前阶段后手动继续。` : `Automatic continuation reached the ${MAX_AUTO_CONTINUE_TURNS}-turn limit; inspect the current stage before continuing manually.`);
       return;
     }
-    const signature = JSON.stringify(status.stages.map(stage => ({ id: stage.id, state: stage.state, issues: stage.issues })));
+    const signature = productionProgressSignature(status);
     if (autoContinueSignature.current === signature) {
       autoContinuePending.current = false;
-      setContinuationNotice(zh ? '自动续跑未观察到阶段或问题列表变化，已暂停以避免重复执行；请检查 Agent 输出后手动继续。' : 'Automatic continuation observed no stage or issue-list change and paused to avoid repetition; inspect the Agent output before continuing manually.');
+      setContinuationNotice(zh ? '自动续跑未观察到产物版本、阶段或问题列表变化，已暂停以避免重复执行；请检查 Agent 输出后手动继续。' : 'No artifact revision, stage or issue-list change was observed; inspect Agent output before continuing manually.');
       return;
     }
     autoContinueSignature.current = signature;

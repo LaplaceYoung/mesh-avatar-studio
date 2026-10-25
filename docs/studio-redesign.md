@@ -586,3 +586,11 @@ bindings and low-confidence findings retain their existing blocking behavior.
 A warning is not visual approval; the Agent must inspect crops rather than resize
 boxes merely to satisfy a guessed facial proportion. This correction does not
 claim measured recognition accuracy across different character styles.
+
+ACP attachment snapshots include unresolved permission requests from the live
+permission map, not only the bounded event history. The client replaces replayed
+permission rows with this authoritative list, including an empty list after
+resolution. Snapshotting never selects or approves an option; existing option
+validation and cancellation remain unchanged. This closes a recovery gap when
+a permission event has been trimmed from long session history. Real pending
+permission/reconnect interaction has not yet been manually exercised.

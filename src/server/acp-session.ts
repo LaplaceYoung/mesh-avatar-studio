@@ -19,7 +19,7 @@ export class AcpSession {
   private busy = false;
   private turnToolIds = new Set<string>();
   private config: SessionConfigOption[] = [];
-  private permissions = new Map<string, { options: Set<string>; resolve(value: RequestPermissionResponse): void }>();
+  private permissions = new Map<string, { options: Set<string>; event: AgentEvent; resolve(value: RequestPermissionResponse): void }>();
   constructor(provider: Provider, private root: string, private emit: (event: AgentEvent) => void) {
     this.process = spawn(process.execPath, [adapterPath(provider)], { cwd: root, stdio: 'pipe', env: process.env });
     // stderr is diagnostic output, not chat. Drain it without exposing local credentials.
@@ -32,8 +32,9 @@ export class AcpSession {
       })
       .onRequest('session/request_permission', ({ params }) => new Promise<RequestPermissionResponse>(resolve => {
         const id = randomUUID();
-        this.permissions.set(id, { options: new Set(params.options.map(option => option.optionId)), resolve });
-        this.emit({ type: 'permission', id, tool: params.toolCall, options: params.options });
+        const event = { type: 'permission', id, tool: params.toolCall, options: params.options };
+        this.permissions.set(id, { options: new Set(params.options.map(option => option.optionId)), event, resolve });
+        this.emit(event);
       }));
     this.connection = app.connect(ndJsonStream(Writable.toWeb(this.process.stdin), Readable.toWeb(this.process.stdout) as unknown as ReadableStream<Uint8Array>));
     this.process.on('error', error => { this.emit({ type: 'error', message: error.message }); this.close(); });
@@ -49,7 +50,7 @@ export class AcpSession {
       this.emit({ type: 'ready', agent: initialized.agentInfo, session });
     } finally { clearTimeout(timeout); }
   }
-  snapshot() { return { state: this.getState(), configOptions: this.config, toolCallCount: this.turnToolIds.size }; }
+  snapshot() { return { state: this.getState(), configOptions: this.config, toolCallCount: this.turnToolIds.size, permissions: [...this.permissions.values()].map(pending => pending.event) }; }
   getState(): 'starting' | 'working' | 'ready' | 'exited' {
     if (this.disposed) return 'exited';
     if (!this.sessionId) return 'starting';

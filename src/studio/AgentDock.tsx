@@ -32,7 +32,7 @@ type Entry = { id: string; kind: 'user' | 'assistant' | 'tool' | 'plan'; text: s
 type Permission = { id: string; tool: { title?: string; rawInput?: unknown }; options: { optionId: string; name: string; kind: string }[] };
 type Block = { type: string; text?: string; path?: string; oldText?: string | null; newText?: string; content?: Block };
 type Update = { sessionUpdate: string; configOptions?: SessionConfigOption[]; content?: Block | Block[]; rawInput?: unknown; rawOutput?: unknown; toolCallId?: string; title?: string; status?: string; entries?: { content: string; status: string }[] };
-type Event = { type: string; configOptions?: SessionConfigOption[]; session?: { configOptions?: SessionConfigOption[] }; text?: string; message?: string; state?: string; stopReason?: string; toolCallCount?: number; code?: number; update?: Update; events?: Event[] } & Partial<Permission>;
+type Event = { type: string; configOptions?: SessionConfigOption[]; session?: { configOptions?: SessionConfigOption[] }; text?: string; message?: string; state?: string; stopReason?: string; toolCallCount?: number; permissions?: Permission[]; code?: number; update?: Update; events?: Event[] } & Partial<Permission>;
 const labels = { claude: 'Claude Code', codex: 'Codex', pi: 'Pi' };
 export function AgentDock({ project, selection, onRefresh }: { project: string; selection?: string | null; onRefresh(): void }) {
   const { language } = useI18n(), zh = language === 'zh';
@@ -143,6 +143,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     let stableConnectionTimer: ReturnType<typeof setTimeout> | undefined;
     const apply = (event: Event, replaying = false) => {
       if (event.type === 'attached' && !replaying) {
+        if (event.permissions) setPermissions(event.permissions);
         if (event.state) setStatus(event.state);
         if (event.configOptions) setConfig(event.configOptions);
         // Historical completions must not end the currently running turn.

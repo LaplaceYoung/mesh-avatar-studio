@@ -449,25 +449,31 @@ function Workspace() {
   };
   return <main className="studio-app" onDragOver={event => event.preventDefault()} onDrop={event => { event.preventDefault(); const file = event.dataTransfer.files[0]; if (file?.name.toLowerCase().endsWith('.mavatar')) void importFile(file); else void openFile(file); }}>
     <header className="studio-header">
-      <div className="studio-brand"><span className="brand-mark">M</span><div><h1>MESH <span>STUDIO</span></h1><small>{zh ? '角色创作工作台' : 'AVATAR WORKBENCH'}</small></div></div>
+      <div className="studio-brand"><span className="brand-mark" aria-hidden="true">M</span><h1>Mesh Studio</h1></div>
       <div className="studio-project-name"><strong>{projectName}</strong><Tag color={dirty ? 'orange' : undefined}>{dirty ? zh ? '未保存' : 'Unsaved' : localProject?.readOnly || !localProject ? t.readOnly : zh ? '已保存' : 'Saved'}</Tag></div>
       <nav className="studio-actions" aria-label={t.tools}>
         <input ref={fileInput} type="file" accept=".json,application/json" hidden aria-label={t.rigFile} onChange={event => { void openFile(event.target.files?.[0]); event.target.value = ''; }} />
         <input ref={folderInput} type="file" multiple hidden aria-label={t.folderFiles} {...{ webkitdirectory: '' }} onChange={event => { void openFolder(Array.from(event.target.files ?? [])); event.target.value = ''; }} />
+        <div className="studio-tool-group" role="group" aria-label={zh ? '项目与编辑' : 'Project and editing'}>
         <Button aria-label={t.openProject} icon={<FolderOpenOutlined />} onClick={() => { showProjects(); void localProjects().then(setProjects); }}>{t.openProject}</Button>
         <Tooltip title={`${t.save} · ⌘S`}><Button icon={<SaveOutlined />} aria-label={t.save} loading={saving} disabled={busy || playbackOnly} onClick={() => { void save(); }} /></Tooltip>
         <Button icon={<UndoOutlined />} aria-label={t.undo} disabled={!history.canUndo || busy || playbackOnly} onClick={() => setRig(history.undo())} />
         <Button icon={<RedoOutlined />} aria-label={t.redo} disabled={!history.canRedo || busy || playbackOnly} onClick={() => setRig(history.redo())} />
+        </div>
+        <div className="studio-tool-group" role="group" aria-label={zh ? '输出' : 'Output'}>
         <ExportAvatar busy={busy || saving} available={!!rootPath || !!pickedFiles.current} writable={writable} dirty={dirty} stale={changed.length > 0} onExport={exportFile} />
         <Button icon={<VideoCameraOutlined />} href={localProject || listedProject || !pickedName ? `/live.html?project=${encodeURIComponent(localProject?.name ?? listedProject?.name ?? 'sample-miko-qipao')}` : undefined} disabled={!!pickedName && !localProject && !listedProject} target="_blank" rel="noreferrer">{liveText[language].title}</Button>
+        </div>
+        <div className="studio-tool-group" role="group" aria-label={zh ? '助手与设置' : 'Assistant and settings'}>
         <Button type={agentOpen ? 'primary' : 'default'} icon={<CodeOutlined />} aria-pressed={agentOpen} onClick={toggleAgent}>Agent</Button>
         <Button icon={<QuestionCircleOutlined />} aria-label={t.help} onClick={showHelp} />
         <Segmented aria-label={t.language} size="small" value={language} options={[{ value: 'zh', label: '中文' }, { value: 'en', label: 'EN' }, { value: 'ja', label: 'JA' }]} onChange={setLanguage} />
         <ThemeToggle />
+        </div>
       </nav>
     </header>
     <Drawer title={<Space><AppstoreOutlined />{zh ? '项目工作台' : 'Projects'}</Space>} placement="left" size={680} open={projectLibrary} onClose={() => setProjectLibrary(false)}>
-      <div className="library-intro"><h2>{zh ? '从一张插画，到一个角色。' : 'An illustration. A character in motion.'}</h2><p>{t.projectHelp}</p><Space wrap><Button icon={<FolderOpenOutlined />} onClick={() => { void chooseFile(true); }}>{t.openFolder}</Button><Button disabled={playbackOnly} onClick={() => { void chooseFile(false); }}>{t.openRig}</Button></Space></div>
+      <div className="library-intro"><h2>{zh ? '项目' : 'Projects'}</h2><p>{t.projectHelp}</p><Space wrap><Button icon={<FolderOpenOutlined />} onClick={() => { void chooseFile(true); }}>{t.openFolder}</Button><Button disabled={playbackOnly} onClick={() => { void chooseFile(false); }}>{t.openRig}</Button></Space></div>
       <Tabs items={[
         { key: 'local', label: t.localProjects, children: <div className="library-list">{projects?.map(project => <Button block key={project.name} disabled={opening || !!project.error} data-testid={`project-${project.name}`} onClick={() => openEntry(project)}><div><strong>{project.readOnly ? t.sampleProject : project.name}</strong><small>{project.relativePath}</small><small>{project.error ? `${t.unreadableProject}: ${project.error.code}` : `${t.updated}: ${new Date(project.updatedAt).toLocaleString(locale)}`}</small></div><Tag>{project.readOnly ? t.readOnly : !project.error && project.hasSource === false ? sharing.playbackBadge : zh ? '可编辑' : 'Editable'}</Tag></Button>)}{projects?.length === 0 && <Empty description={t.noProjects} />}</div> },
         { key: 'recent', label: t.recent, children: recentControl },
@@ -497,7 +503,7 @@ function Workspace() {
         </Splitter.Panel>
         <Splitter.Panel min={280}>
           <section className="editor-panel" inert={busy}>
-            <div className="panel-heading"><Space><span className="section-index">01</span><strong>{t.source}</strong></Space><span className="muted">{rig.image.width} × {rig.image.height} {t.px}</span></div>
+            <div className="panel-heading"><Space><strong>{t.source}</strong></Space><span className="muted">{rig.image.width} × {rig.image.height} {t.px}</span></div>
             {!playbackOnly ? <div className="canvas-stage"><EditorCanvas sourceUrl={sourceUrl} rig={rig} visible={visible} selected={selected} onSelect={value => { setSelected(value); setInspectorTab('properties'); }} onChange={update} focusRequest={focusRequest} onBegin={() => { history.begin(); setDragStale(changed.length > 0); }} onEnd={() => { history.end(); setRig(structuredClone(history.present)); setDragStale(null); }} />{guide && <FirstGuide onDismiss={dismissGuide} />}</div> : <Empty description={sharing.playbackOnly} />}
           </section>
         </Splitter.Panel>

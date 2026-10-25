@@ -79,12 +79,13 @@ export function AgentWindow({ open, onOpenChange, status, provider, children }: 
   const desktopLayout = typeof window === 'undefined' || window.innerWidth > 600;
   const style = !expanded && desktopLayout ? { ...(position ? { left: position.x, top: position.y, right: 'auto', bottom: 'auto' } : {}), ...(size ? { width: size.width, height: size.height } : {}) } : undefined;
   const statusLabels: Record<string, [string, string]> = {
+    awaiting_permission: ['等待工具授权', 'Awaiting permission'],
     idle: ['未连接', 'Idle'], starting: ['正在连接', 'Connecting'], ready: ['已就绪', 'Ready'], working: ['执行中', 'Working'], disconnected: ['连接断开，待重连', 'Disconnected; reconnect'],
     configuring: ['更新配置', 'Configuring'], exited: ['已结束', 'Ended'],
   };
   const statusLabel = status ? statusLabels[status]?.[zh ? 0 : 1] ?? status : '';
   const providerLabel = provider === 'codex' ? 'Codex' : provider === 'pi' ? 'Pi' : 'Claude';
-  const active = status === 'starting' || status === 'working' || status === 'configuring';
+  const active = status === 'starting' || status === 'working' || status === 'configuring' || status === 'awaiting_permission';
   return <>
     {!open && <Button ref={launcherRef} className={`agent-launcher${active ? ' agent-launcher-active' : ''}`} type="primary" icon={<CodeOutlined />} onClick={() => onOpenChange(true)} aria-expanded={open} aria-controls={windowId} aria-label={zh ? `展开 Agent 对话${statusLabel ? `，${statusLabel}` : ''}` : `Open agent conversation${statusLabel ? `, ${statusLabel}` : ''}`}>
       Agent · {providerLabel}{statusLabel && <span className="agent-launcher-status">{statusLabel}</span>}

@@ -56,7 +56,9 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   const feed = useRef<HTMLDivElement>(null), pinned = useRef(true);
   const reconnectTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const reconnects = useRef(0);
-  useEffect(() => { window.dispatchEvent(new CustomEvent('studio:agent-status', { detail: { status, provider: session?.provider ?? provider } })); }, [provider, session?.provider, status]);
+  const awaitingPermission = permissions.length > 0 && (status === 'working' || status === 'ready');
+  const displayStatus = awaitingPermission ? 'awaiting_permission' : status;
+  useEffect(() => { window.dispatchEvent(new CustomEvent('studio:agent-status', { detail: { status: displayStatus, provider: session?.provider ?? provider } })); }, [provider, session?.provider, displayStatus]);
   const emitActivity = (state: ProductionActivity['state'], message?: string, projectName = productionProject.current) => {
     if (!projectName) return;
     window.dispatchEvent(new CustomEvent<ProductionActivity>('studio:production-activity', { detail: { projectName, state, message, at: new Date().toISOString() } }));
@@ -237,9 +239,9 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
   }, [session, attempt]);
   const send = (message: object) => { if (socket.current?.readyState === WebSocket.OPEN) { socket.current.send(JSON.stringify(message)); return true; } setError(zh ? '会话连接已断开，请重连。' : 'Session disconnected. Reconnect first.'); return false; };
   const active = status === 'ready' || status === 'working';
-  const statusLabel: Record<string, string> = { idle: '未连接', starting: '正在初始化 ACP', ready: '就绪', working: '执行中', configuring: '更新配置中', disconnected: productionTurn.current ? '连接断开，待重连' : '已断开', exited: '已结束' };
+  const statusLabel: Record<string, string> = { awaiting_permission: '等待工具授权', idle: '未连接', starting: '正在初始化 ACP', ready: '就绪', working: '执行中', configuring: '更新配置中', disconnected: productionTurn.current ? '连接断开，待重连' : '已断开', exited: '已结束' };
   return <section className="agent-dock" aria-label={zh ? 'Agent 对话' : 'Agent conversation'}>
-    <div className="agent-toolbar"><Space><Tag color={active ? 'green' : 'default'}>{zh ? statusLabel[status] ?? status : status}</Tag><span className="muted">ACP</span></Space>
+    <div className="agent-toolbar"><Space><Tag color={awaitingPermission ? 'warning' : active ? 'green' : 'default'}>{zh ? statusLabel[displayStatus] ?? displayStatus : awaitingPermission ? 'Awaiting permission' : status}</Tag><span className="muted">ACP</span></Space>
       <Space wrap><Select aria-label="Agent" value={provider} disabled={!!session && status !== 'exited'} onChange={setProvider} style={{ width: 142 }} options={(providers.length ? providers : (Object.keys(labels) as Provider[]).map(id => ({ id, available: true }))).map(p => ({ value: p.id, label: `${labels[p.id]}${p.available ? '' : zh ? ' · 未安装' : ' · missing'}`, disabled: !p.available }))} />
         {(!session || status === 'exited') && <Button type="primary" loading={status === 'starting'} onClick={() => { void start(); }}>{zh ? '连接' : 'Connect'}</Button>}
         {status === 'disconnected' && <Button onClick={() => { reconnects.current = 0; setError(''); setStatus('starting'); setAttempt(value => value + 1); }}>{zh ? '重连' : 'Reconnect'}</Button>}
@@ -263,6 +265,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
       {!entries.length && <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={zh ? '连接 Agent 后描述创作任务，工具调用和审批会显示在这里。' : 'Connect an agent to start. Tool activity and permissions appear here.'} />}
       {entries.map(entry => entry.kind === 'tool' ? <Collapse className="agent-tool-detail" ghost key={entry.id} items={[{ key: entry.id, label: <span className="agent-tool"><Tag color={entry.status === 'failed' ? 'error' : entry.status === 'completed' ? 'success' : undefined}>{entry.status ?? 'pending'}</Tag><span>{entry.text}</span></span>, children: entry.detail ? <pre>{entry.detail}</pre> : <small className="muted">{zh ? 'Agent 尚未提供详细结果。' : 'No detailed output reported yet.'}</small> }]} /> : <article key={entry.id} className={`agent-message agent-message-${entry.kind}`}><small>{entry.kind === 'user' ? zh ? '你' : 'You' : entry.kind === 'plan' ? zh ? '执行计划' : 'Plan' : labels[session?.provider ?? provider]}</small><div>{entry.text}</div></article>)}
     </div>
+    {awaitingPermission && <Alert type="warning" showIcon title={zh ? `有 ${permissions.length} 项工具授权等待处理` : `${permissions.length} tool permission request(s) need your decision`} description={zh ? 'Agent 正在等待你的决定。收起窗口不会批准或拒绝请求。' : 'The Agent is waiting for your decision. Minimizing does not approve or reject requests.'} />}
     {permissions.map(permission => <div className="agent-permission" key={permission.id}><strong>{permission.tool?.title ?? (zh ? '请求工具权限' : 'Tool permission')}</strong>
       {permission.tool?.rawInput !== undefined && <Collapse ghost items={[{ key: 'input', label: zh ? '查看请求参数' : 'Request details', children: <pre>{JSON.stringify(permission.tool.rawInput, null, 2)}</pre> }]} />}
       <Space wrap>{permission.options.map(option => <Button key={option.optionId} danger={option.kind.startsWith('reject')} onClick={() => send({ type: 'permission', id: permission.id, optionId: option.optionId })}>{option.name}</Button>)}<Button onClick={() => send({ type: 'permission', id: permission.id, optionId: null })}>{zh ? '取消' : 'Cancel'}</Button></Space>

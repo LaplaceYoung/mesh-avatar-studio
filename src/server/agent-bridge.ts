@@ -7,6 +7,7 @@ import type { IncomingMessage } from 'node:http';
 import type { Plugin } from 'vite';
 import { AcpSession, adapterPath, type AgentEvent } from './acp-session';
 import { ProductionTurns } from './production-turns';
+import { agentPromptError } from '../shared/agent-prompt';
 
 export const AGENTS = ['claude', 'codex', 'pi'] as const;
 export type AgentProvider = typeof AGENTS[number];
@@ -87,7 +88,13 @@ export function agentBridge(root: string): Plugin {
               if (session.exit !== undefined) client.send(JSON.stringify({ type: 'exit', code: session.exit }));
               return;
             }
-            if (message.type === 'prompt' && typeof message.text === 'string' && message.text.trim() && message.text.length <= 64 * 1024 && session.exit === undefined) {
+            if (message.type === 'prompt') {
+              const invalid = agentPromptError(message.text);
+              if (invalid || session.exit !== undefined) {
+                client.send(JSON.stringify({ type: 'error', message: invalid ?? 'Agent session has ended. Connect again before sending a prompt.' }));
+                client.send(JSON.stringify({ type: 'state', state: session.agent.getState() }));
+                return;
+              }
               const current = session;
               const task = message.projectName === undefined
                 ? current.agent.prompt(message.text)

@@ -1,3 +1,4 @@
+import { agentPromptError } from '../shared/agent-prompt';
 import type { SessionConfigOption } from '@agentclientprotocol/sdk';
 import { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Checkbox, Collapse, Empty, Select, Space, Tag } from 'antd';
@@ -114,6 +115,8 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     const receive = (event: globalThis.Event) => {
       const value = (event as CustomEvent<{ prompt: string; projectName: string; source: string; autoContinue?: boolean }>).detail;
       if (!value || typeof value.prompt !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,63}$/.test(value.projectName)) { event.preventDefault(); return; }
+      const invalid = agentPromptError(value.prompt);
+      if (invalid) { event.preventDefault(); setError(invalid); return; }
       if (pendingRef.current || productionTurn.current || status === 'working' || status === 'starting') { event.preventDefault(); setError(zh ? '已有制作任务正在执行，请等待完成或失败后再提交新的任务。' : 'A production task is already running. Wait for it to complete or fail before submitting another.'); return; }
       if (!acquireLock(value.projectName)) { event.preventDefault(); setError(zh ? '另一个标签页正在制作，请等待完成或关闭后再试。' : 'Another tab is already running production. Wait for it to finish or close it before retrying.'); return; }
       pendingRef.current = value; setPendingCreation(value);
@@ -237,7 +240,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     };
     return () => { clearTimeout(stableConnectionTimer); ws.onclose = null; ws.close(); socket.current = null; if (reconnectTimer.current) { clearTimeout(reconnectTimer.current); reconnectTimer.current = null; } };
   }, [session, attempt]);
-  const send = (message: object) => { if (socket.current?.readyState === WebSocket.OPEN) { socket.current.send(JSON.stringify(message)); return true; } setError(zh ? '会话连接已断开，请重连。' : 'Session disconnected. Reconnect first.'); return false; };
+  const send = (message: { type: string; text?: string; [key: string]: unknown }) => { if (message.type === 'prompt') { const invalid = agentPromptError(message.text); if (invalid) { setError(invalid); return false; } } if (socket.current?.readyState === WebSocket.OPEN) { socket.current.send(JSON.stringify(message)); return true; } setError(zh ? '会话连接已断开，请重连。' : 'Session disconnected. Reconnect first.'); return false; };
   const active = status === 'ready' || status === 'working';
   const statusLabel: Record<string, string> = { awaiting_permission: '等待工具授权', idle: '未连接', starting: '正在初始化 ACP', ready: '就绪', working: '执行中', configuring: '更新配置中', disconnected: productionTurn.current ? '连接断开，待重连' : '已断开', exited: '已结束' };
   return <section className="agent-dock" aria-label={zh ? 'Agent 对话' : 'Agent conversation'}>

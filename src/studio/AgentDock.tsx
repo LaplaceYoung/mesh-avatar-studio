@@ -32,7 +32,7 @@ type Entry = { id: string; kind: 'user' | 'assistant' | 'tool' | 'plan'; text: s
 type Permission = { id: string; tool: { title?: string; rawInput?: unknown }; options: { optionId: string; name: string; kind: string }[] };
 type Block = { type: string; text?: string; path?: string; oldText?: string | null; newText?: string; content?: Block };
 type Update = { sessionUpdate: string; configOptions?: SessionConfigOption[]; content?: Block | Block[]; rawInput?: unknown; rawOutput?: unknown; toolCallId?: string; title?: string; status?: string; entries?: { content: string; status: string }[] };
-type Event = { type: string; configOptions?: SessionConfigOption[]; session?: { configOptions?: SessionConfigOption[] }; text?: string; message?: string; state?: string; stopReason?: string; code?: number; update?: Update; events?: Event[] } & Partial<Permission>;
+type Event = { type: string; configOptions?: SessionConfigOption[]; session?: { configOptions?: SessionConfigOption[] }; text?: string; message?: string; state?: string; stopReason?: string; toolCallCount?: number; code?: number; update?: Update; events?: Event[] } & Partial<Permission>;
 const labels = { claude: 'Claude Code', codex: 'Codex', pi: 'Pi' };
 export function AgentDock({ project, selection, onRefresh }: { project: string; selection?: string | null; onRefresh(): void }) {
   const { language } = useI18n(), zh = language === 'zh';
@@ -181,7 +181,8 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
           const projectName = clearProductionTurn();
           // Cancellation and limits are terminal for automation, even though
           // ACP returns them through the same response as a normal end_turn.
-          const completed = event.stopReason === 'end_turn' && productionToolObserved.current;
+          const toolObserved = typeof event.toolCallCount === 'number' ? event.toolCallCount > 0 : productionToolObserved.current;
+          const completed = event.stopReason === 'end_turn' && toolObserved;
           emitActivity(completed ? 'completed' : 'failed', completed
             ? zh ? 'Agent 回合结束，正在检查制作产物；不代表角色已完成。' : 'Agent turn ended; inspecting artifacts, not declaring the avatar complete.'
             : event.stopReason === 'end_turn' ? zh ? '本回合未观察到制作工具调用，不能确认执行成功；请检查产物和 Agent 配置后手动继续。' : 'No production tool activity was observed. Inspect artifacts and Agent configuration before resuming manually.'

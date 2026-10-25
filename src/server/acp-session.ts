@@ -17,6 +17,7 @@ export class AcpSession {
   private sessionId = '';
   private disposed = false;
   private busy = false;
+  private turnToolIds = new Set<string>();
   private config: SessionConfigOption[] = [];
   private permissions = new Map<string, { options: Set<string>; resolve(value: RequestPermissionResponse): void }>();
   constructor(provider: Provider, private root: string, private emit: (event: AgentEvent) => void) {
@@ -25,6 +26,7 @@ export class AcpSession {
     this.process.stderr.on('data', () => {});
     const app = new ClientApp()
       .onNotification('session/update', ({ params }) => {
+        if (this.busy && (params.update.sessionUpdate === 'tool_call' || params.update.sessionUpdate === 'tool_call_update')) this.turnToolIds.add(params.update.toolCallId);
         if (params.update.sessionUpdate === 'config_option_update') this.config = params.update.configOptions;
         this.emit({ type: 'update', update: params.update });
       })
@@ -56,10 +58,11 @@ export class AcpSession {
     if (!this.sessionId || this.disposed) throw new Error('Agent is not connected.');
     if (this.busy) throw new Error('Wait for this turn or cancel it before sending another task.');
     this.busy = true;
+    this.turnToolIds.clear();
     this.emit({ type: 'user', text }); this.emit({ type: 'state', state: 'working' });
     try {
       const result = await this.connection.agent.request('session/prompt', { sessionId: this.sessionId, prompt: [{ type: 'text', text }] });
-      this.emit({ type: 'complete', stopReason: result.stopReason });
+      this.emit({ type: 'complete', stopReason: result.stopReason, toolCallCount: this.turnToolIds.size });
     } finally { this.busy = false; this.cancelPermissions(); this.emit({ type: 'state', state: this.disposed ? 'exited' : 'ready' }); }
   }
   async configure(configId: string, value: string | boolean) {

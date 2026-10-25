@@ -555,3 +555,18 @@ the queue checks/acquires the lease again; a foreign live lease cancels the loca
 queue with a failed activity so the creator can recover. This remains a best-effort
 localStorage lease, not atomic cross-process exclusion; simultaneous acquisition
 requires server-side coordination to guarantee single-writer behavior.
+
+## Server-side production turn exclusion
+
+Purpose: serialize concurrent creation/recovery/correction prompts for the same
+project within one local ACP bridge. Studio production prompts send projectName;
+ordinary chat remains untagged. ProductionTurns validates the name, acquires
+synchronously before invoking the adapter, and releases only when its promise
+settles (success or failure). Socket disconnection and cancellation requests do
+not themselves release it. Conflicts emit the existing session error event;
+no second production action runs. No prompt contents or credentials are logged.
+Direct deferred-promise checks covered same-project rejection, another project
+proceeding, successful/failed release and invalid names. These are not browser
+E2E tests. Limits: this is not a filesystem lock, does not coordinate multiple
+dev-server processes, and cannot constrain untagged chat or agent child processes
+that outlive the reported turn. No timeout forcibly frees an active turn.

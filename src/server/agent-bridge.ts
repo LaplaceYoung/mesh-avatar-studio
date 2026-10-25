@@ -6,6 +6,7 @@ import { WebSocketServer, WebSocket } from 'ws';
 import type { IncomingMessage } from 'node:http';
 import type { Plugin } from 'vite';
 import { AcpSession, adapterPath, type AgentEvent } from './acp-session';
+import { ProductionTurns } from './production-turns';
 
 export const AGENTS = ['claude', 'codex', 'pi'] as const;
 export type AgentProvider = typeof AGENTS[number];
@@ -35,6 +36,7 @@ async function executable(provider: AgentProvider) {
 type Session = { id: string; provider: AgentProvider; token: string; agent: AcpSession; events: AgentEvent[]; bytes: number; clients: Set<WebSocket>; exit?: number; timer?: ReturnType<typeof setTimeout> };
 export function agentBridge(root: string): Plugin {
   const sessions = new Map<string, Session>();
+  const productionTurns = new ProductionTurns();
   let starting = 0;
   const wss = new WebSocketServer({ noServer: true, maxPayload: 128 * 1024 });
   const emit = (session: Session, message: AgentEvent) => { session.events.push(message); session.bytes += JSON.stringify(message).length; while (session.bytes > 2 * 1024 * 1024 && session.events.length > 1) session.bytes -= JSON.stringify(session.events.shift()).length; for (const client of session.clients) if (client.readyState === WebSocket.OPEN) client.send(JSON.stringify(message)); };
@@ -87,7 +89,10 @@ export function agentBridge(root: string): Plugin {
             }
             if (message.type === 'prompt' && typeof message.text === 'string' && message.text.trim() && message.text.length <= 64 * 1024 && session.exit === undefined) {
               const current = session;
-              void current.agent.prompt(message.text).catch(error => emit(current, { type: 'error', message: String(error) }));
+              const task = message.projectName === undefined
+                ? current.agent.prompt(message.text)
+                : productionTurns.run(message.projectName, () => current.agent.prompt(message.text));
+              void task.catch(error => emit(current, { type: 'error', message: String(error) }));
             }
             if (message.type === 'configure' && typeof message.configId === 'string' && (typeof message.value === 'string' || typeof message.value === 'boolean')) {
               const current = session;

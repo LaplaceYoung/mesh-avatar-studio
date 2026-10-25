@@ -134,7 +134,7 @@ export function AgentDock({ project, selection, onRefresh }: { project: string; 
     }
     // Consume before sending. Reconnection must not silently duplicate a creation request.
     pendingRef.current = undefined; setPendingCreation(undefined); productionToolObserved.current = false; productionTurn.current = true; productionProject.current = pending.projectName; savePreference(TURN_KEY, JSON.stringify({ sessionId: session?.id, projectName: pending.projectName, source: pending.source })); savePreference(LOCK_KEY, JSON.stringify({ owner: TAB_ID, projectName: pending.projectName, expiresAt: Date.now() + LOCK_TTL })); emitActivity('working', zh ? 'ACP 已连接，开始执行制作任务。' : 'ACP connected; production task started.'); setStatus('working');
-    socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt }));
+    socket.current.send(JSON.stringify({ type: 'prompt', text: pending.prompt, projectName: pending.projectName }));
     pinned.current = true;
   }, [status, pendingCreation]);
   useEffect(() => { if (pinned.current && feed.current) feed.current.scrollTop = feed.current.scrollHeight; }, [entries, permissions]);

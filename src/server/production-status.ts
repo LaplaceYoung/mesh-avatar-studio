@@ -299,7 +299,10 @@ export function productionStatusPlugin(root: string): Plugin {
       if (!safeName.test(name)) return reply(400, { error: 'Invalid project name.' });
       if (url.pathname === '/__studio/production-signoff') {
         if (req.method !== 'POST') return reply(405, { error: 'Use POST.' });
+        const revision = url.searchParams.get('revision');
+        if (!revision || !/^[a-f0-9]{64}$/.test(revision)) return reply(400, { error: 'Provide the review revision you inspected.' });
         const result = await inspectProduction(root, name).catch(() => null);
+        if (result?.reviewSha256 !== revision) return reply(409, { error: 'Review images changed. Inspect the latest revision before approving.' });
         const review = result?.stages.find(stage => stage.id === 'review');
         if (!result?.projectExists || !review || result.stages.some(stage => stage.state !== 'observed')) return reply(409, { error: 'All production stages must be present and valid before visual signoff.' });
         if (result.visualReview === 'approved') return reply(200, { approved: true });

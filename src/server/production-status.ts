@@ -197,6 +197,7 @@ export async function inspectProduction(root: string, name: string): Promise<Pro
   });
   await stage('review', async result => {
     const metadata = await json('review/poses.json', result);
+    if (metadata.diagnosticOnly || metadata.hiddenLayers?.length) result.issues.push('Diagnostic renders hide layers and cannot serve as official visual review evidence. Re-render without diagnostic flags.');
     if (!Array.isArray(metadata.files) || !metadata.files.length || metadata.files.length > 256 || metadata.files.some((name: unknown) => typeof name !== 'string' || !/^[A-Za-z0-9_-]+\.png$/.test(name))) throw new Error('Invalid review image list.');
     const reviewFiles = new Set(metadata.files as string[]);
     const requiredPoses = ['rest', 'eyes-half', 'eyes-closed', 'mouth-open', 'turn-left', 'turn-right', 'look-up', 'look-down', 'tilt-left', 'tilt-right', 'body-left', 'body-right', 'angry', 'sad', 'surprise'];

@@ -235,3 +235,16 @@ lower skin/ink thresholds from this one observation: eyebrows and nearby hair
 must remain intact. Inspect the rest pose and both closed-eye crops after each
 change. ROI changes also alter crop bounds, so align comparisons in source
 coordinates rather than interpreting shifted crop positions as deformation.
+
+To isolate crease-layer artifacts without modifying the runtime or project assets:
+
+```sh
+npm run render-poses -- projects/<name> --hide-eye-creases
+```
+
+This writes diagnostic-only frames to `work/review-without-eye-creases/` inside
+the project. Required texture dimensions are preserved, but crease textures are
+transparent only for this render. Compare its closed-eye crop with the normal
+`review/eyes-closed-eyes.png`. Do not use these diagnostic frames for visual
+signoff or copy them into the official review directory. If marks remain, inspect
+the base and other eye layers instead of assuming the crease layer caused them.

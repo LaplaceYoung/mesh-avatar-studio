@@ -18,12 +18,14 @@ const poses = [
 ];
 
 async function main() {
-  const args = process.argv.slice(2);
+  const rawArgs = process.argv.slice(2);
+  const hideEyeCreases = rawArgs.includes('--hide-eye-creases');
+  const args = rawArgs.filter(arg => arg !== '--hide-eye-creases');
   if (args.includes('--help')) {
-    console.log('Usage: npm run render-poses -- <project>');
+    console.log('Usage: npm run render-poses -- <project> [--hide-eye-creases]');
     return;
   }
-  if (args.length !== 1) throw new Error('Usage: npm run render-poses -- <project>');
+  if (args.length !== 1) throw new Error('Usage: npm run render-poses -- <project> [--hide-eye-creases]');
   const project = await realpath(resolve(args[0]));
   if (relative(root, project).startsWith('..')) throw new Error('project must stay inside the repository');
   const rig = JSON.parse(await readFile(resolve(project, 'rig.json'), 'utf8'));
@@ -71,13 +73,22 @@ async function main() {
     // Only the local code server may be contacted; private images use data URLs.
     await page.route('**/*', route => new URL(route.request().url()).origin === origin ? route.continue() : route.abort());
     await page.goto(`${origin}/__pose_review__`);
-    const result = await page.evaluate(async ({ rig, assets, poses }) => {
+    const result = await page.evaluate(async ({ rig, assets, poses, hideEyeCreases }) => {
       const { createMeshAvatar, PARAMS } = await import('/packages/runtime/src/index.ts');
       const canvas = document.getElementById('avatar');
       const width = Math.ceil(rig.image.width * 1.2), height = Math.ceil(rig.image.height * 1.1);
       canvas.style.width = `${width}px`; canvas.style.height = `${height}px`;
       const defaults = Object.fromEntries(PARAMS.map(p => [p.id, p.def]));
       const pictures = [];
+      if (hideEyeCreases) {
+        // Preserve required texture dimensions while isolating crease visibility.
+        for (const name of ['eye0_crease.png', 'eye1_crease.png']) {
+          const image = new Image(); image.src = assets[name]; await image.decode();
+          const blank = document.createElement('canvas');
+          blank.width = image.width; blank.height = image.height;
+          assets[name] = blank.toDataURL();
+        }
+      }
       async function avatar() {
         const av = await createMeshAvatar(canvas, { rig, assets, manual: true, padTop: 0.1, padSide: 0.1 });
         av.setAutoIdle(false); av.setAutoMotion(false); av.setParameters(defaults);
@@ -133,13 +144,13 @@ async function main() {
         ctx.fillStyle = '#171b23'; ctx.font = '16px sans-serif'; ctx.fillText(name, x + 8, y + 22);
       }
       return { images: [...pictures, ...crops, ['contact-sheet', sheet.toDataURL()]], width, height, cropBounds: { eyes, mouth }, padTop: 0.1, padSide: 0.1 };
-    }, { rig, assets, poses });
+    }, { rig, assets, poses, hideEyeCreases });
     if (browserErrors.length) throw new Error(browserErrors.join('\n'));
-    const review = resolve(project, 'review'); await mkdir(review, { recursive: true });
+    const review = resolve(project, hideEyeCreases ? 'work/review-without-eye-creases' : 'review'); await mkdir(review, { recursive: true });
     if (relative(project, await realpath(review)).startsWith('..')) throw new Error('review folder must stay inside the project');
     for (const [name, url] of result.images) await writeFile(resolve(review, `${name}.png`), Buffer.from(url.split(',')[1], 'base64'));
     const { images, ...metadata } = result;
-    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, project: basename(project), fixedFps: 60, poseSeconds: 1, poses: poses.map(([name, parameters, expression]) => ({ name, parameters, ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
+    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, ...(hideEyeCreases ? { diagnosticOnly: true, hiddenLayers: ['eye0_crease', 'eye1_crease'] } : {}), project: basename(project), fixedFps: 60, poseSeconds: 1, poses: poses.map(([name, parameters, expression]) => ({ name, parameters, ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
     console.log(`Rendered ${poses.length + 6} poses, eye/mouth crops and contact-sheet.png in ${relative(root, review)}/`);
   } finally {
     await browser?.close();

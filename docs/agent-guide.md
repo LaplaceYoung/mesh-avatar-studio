@@ -248,3 +248,17 @@ transparent only for this render. Compare its closed-eye crop with the normal
 `review/eyes-closed-eyes.png`. Do not use these diagnostic frames for visual
 signoff or copy them into the official review directory. If marks remain, inspect
 the base and other eye layers instead of assuming the crease layer caused them.
+
+To inspect intermediate blink states, use:
+
+```sh
+npm run render-poses -- projects/<name> --blink-sweep
+```
+
+This renders 11 independently settled eye-open values from 1 to 0 in 0.1 steps,
+plus the usual hair samples, into `work/blink-sweep/` inside the project. Compare
+adjacent eye crops to locate where residual lines emerge. Combine with
+`--hide-eye-creases` to write `work/blink-sweep-without-creases/` for isolation.
+Both outputs are diagnostic-only and cannot establish visual signoff. This is
+parameter-space sampling, not continuous video: it cannot prove absence of
+frame-time flicker, asymmetric-blink artifacts or physics discontinuities.

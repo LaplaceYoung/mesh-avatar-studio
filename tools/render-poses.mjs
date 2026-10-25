@@ -20,12 +20,14 @@ const poses = [
 async function main() {
   const rawArgs = process.argv.slice(2);
   const hideEyeCreases = rawArgs.includes('--hide-eye-creases');
-  const args = rawArgs.filter(arg => arg !== '--hide-eye-creases');
+  const blinkSweep = rawArgs.includes('--blink-sweep');
+  const args = rawArgs.filter(arg => !['--hide-eye-creases', '--blink-sweep'].includes(arg));
+  const renderPoses = blinkSweep ? Array.from({ length: 11 }, (_, index) => [`blink-${String(index).padStart(2, '0')}`, { eyeLOpen: 1 - index / 10, eyeROpen: 1 - index / 10 }]) : poses;
   if (args.includes('--help')) {
-    console.log('Usage: npm run render-poses -- <project> [--hide-eye-creases]');
+    console.log('Usage: npm run render-poses -- <project> [--hide-eye-creases] [--blink-sweep]');
     return;
   }
-  if (args.length !== 1) throw new Error('Usage: npm run render-poses -- <project> [--hide-eye-creases]');
+  if (args.length !== 1) throw new Error('Usage: npm run render-poses -- <project> [--hide-eye-creases] [--blink-sweep]');
   const project = await realpath(resolve(args[0]));
   if (relative(root, project).startsWith('..')) throw new Error('project must stay inside the repository');
   const rig = JSON.parse(await readFile(resolve(project, 'rig.json'), 'utf8'));
@@ -144,14 +146,14 @@ async function main() {
         ctx.fillStyle = '#171b23'; ctx.font = '16px sans-serif'; ctx.fillText(name, x + 8, y + 22);
       }
       return { images: [...pictures, ...crops, ['contact-sheet', sheet.toDataURL()]], width, height, cropBounds: { eyes, mouth }, padTop: 0.1, padSide: 0.1 };
-    }, { rig, assets, poses, hideEyeCreases });
+    }, { rig, assets, poses: renderPoses, hideEyeCreases });
     if (browserErrors.length) throw new Error(browserErrors.join('\n'));
-    const review = resolve(project, hideEyeCreases ? 'work/review-without-eye-creases' : 'review'); await mkdir(review, { recursive: true });
+    const review = resolve(project, blinkSweep ? `work/blink-sweep${hideEyeCreases ? '-without-creases' : ''}` : hideEyeCreases ? 'work/review-without-eye-creases' : 'review'); await mkdir(review, { recursive: true });
     if (relative(project, await realpath(review)).startsWith('..')) throw new Error('review folder must stay inside the project');
     for (const [name, url] of result.images) await writeFile(resolve(review, `${name}.png`), Buffer.from(url.split(',')[1], 'base64'));
     const { images, ...metadata } = result;
-    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, ...(hideEyeCreases ? { diagnosticOnly: true, hiddenLayers: ['eye0_crease', 'eye1_crease'] } : {}), project: basename(project), fixedFps: 60, poseSeconds: 1, poses: poses.map(([name, parameters, expression]) => ({ name, parameters, ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
-    console.log(`Rendered ${poses.length + 6} poses, eye/mouth crops and contact-sheet.png in ${relative(root, review)}/`);
+    await writeFile(resolve(review, 'poses.json'), JSON.stringify({ ...metadata, ...(blinkSweep || hideEyeCreases ? { diagnosticOnly: true, diagnostic: blinkSweep ? 'blink-sweep' : 'hidden-creases', hiddenLayers: hideEyeCreases ? ['eye0_crease', 'eye1_crease'] : [] } : {}), project: basename(project), fixedFps: 60, poseSeconds: 1, poses: renderPoses.map(([name, parameters, expression]) => ({ name, parameters, ...(expression && { expression }) })), hairFrames: 6, files: images.map(([name]) => `${name}.png`) }, null, 2) + '\n');
+    console.log(`Rendered ${renderPoses.length + 6} poses, eye/mouth crops and contact-sheet.png in ${relative(root, review)}/`);
   } finally {
     await browser?.close();
     await server.close();
